@@ -57,9 +57,18 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
   private int scriptNodeCount = 0;
 
   /**
-   * Maps exported names to their names in current module.
+   * Maps exported names to their names in current module with source info node.
+   * Eg: "export {foo as bar}" maps 'bar' to 'foo',
+   * "export {baz as qux} from 'lib'" maps 'qux' to 'lib.baz'.
    */
   private Map<String, NameNodePair> exportMap = new LinkedHashMap<>();
+
+  /**
+   * Maps local names to exported names. Essentially a inverted exportMap.
+   * But this does not include re-export names.
+   * Eg: "export {foo as bar}" maps 'foo' to 'bar',
+   */
+  private Map<String, String> exportedMap = new HashMap<>();
 
   /**
    * Maps symbol names to a pair of (moduleName, originalName). The original
@@ -211,11 +220,13 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
         decl.setJSDocInfo(export.getJSDocInfo());
         parent.replaceChild(export, decl);
         exportMap.put("default", new NameNodePair(name, child));
+        exportedMap.put(name, "default");
       } else {
         Node var = IR.var(IR.name(DEFAULT_EXPORT_NAME), export.removeFirstChild());
         var.useSourceInfoIfMissingFromForTree(export);
         parent.replaceChild(export, var);
         exportMap.put("default", new NameNodePair(DEFAULT_EXPORT_NAME, child));
+        exportedMap.put(DEFAULT_EXPORT_NAME, "default");
       }
     } else if (export.getBooleanProp(Node.EXPORT_ALL_FROM)) {
       //   export * from 'moduleIdentifier';
@@ -249,12 +260,14 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
       if (export.getFirstChild().getType() == Token.EXPORT_SPECS) {
         //     export {Foo};
         for (Node exportSpec : export.getFirstChild().children()) {
-          Node origName = exportSpec.getFirstChild();
+          String origName = exportSpec.getFirstChild().getString();
+          String exportedName = exportSpec.getChildCount() == 2
+              ? exportSpec.getLastChild().getString()
+              : origName;
           exportMap.put(
-              exportSpec.getChildCount() == 2
-                  ? exportSpec.getLastChild().getString()
-                  : origName.getString(),
-              new NameNodePair(origName.getString(), exportSpec));
+              exportedName,
+              new NameNodePair(origName, exportSpec));
+          exportedMap.put(origName, exportedName);
         }
         parent.removeChild(export);
       } else {
@@ -275,15 +288,11 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
           Var v = t.getScope().getVar(name);
           if (v == null || v.isGlobal()) {
             exportMap.put(name, new NameNodePair(name, maybeName));
+            exportedMap.put(name, name);
           }
 
-          // If the declaration declares a new type, create annotations for
+          // If the declaration declares a typedef, create annotations for
           // the type checker.
-          // TODO(moz): Currently we only record ES6 classes and typedefs,
-          // need to handle other kinds of type declarations too.
-          if (declaration.isClass()) {
-            classes.add(name);
-          }
           if (export.getJSDocInfo() != null && export.getJSDocInfo().hasTypedefType()) {
             typedefs.add(name);
           }
@@ -312,9 +321,14 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
     URI normalizedAddress = loader.normalizeInputAddress(t.getInput());
     String moduleName = ES6ModuleLoader.toModuleName(normalizedAddress);
 
+    if (!exportMap.isEmpty()) {
+      NodeTraversal.traverseEs6(compiler, script, new ProcessAssignmentToExportedVar(moduleName));
+    }
+
     for (Map.Entry<String, NameNodePair> entry : exportMap.entrySet()) {
       String exportedName = entry.getKey();
       String withSuffix = entry.getValue().name;
+      boolean isConst = entry.getValue().isConst;
       Node nodeForSourceInfo = entry.getValue().nodeForSourceInfo;
       Node getProp = IR.getprop(IR.name(moduleName), IR.string(exportedName));
 
@@ -332,13 +346,13 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
         script.addChildToBack(exprResult);
       } else {
         //   moduleName.foo = foo;
-        // with a @const annotation if needed.
+        // with a @const annotation if possible.
         Node assign = IR.assign(
             getProp,
             NodeUtil.newQName(compiler, withSuffix));
         Node exprResult = IR.exprResult(assign)
             .useSourceInfoIfMissingFromForTree(nodeForSourceInfo);
-        if (classes.contains(exportedName)) {
+        if (isConst) {
           JSDocInfoBuilder builder = new JSDocInfoBuilder(true);
           builder.recordConstancy();
           JSDocInfo info = builder.build();
@@ -373,6 +387,7 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
     script.setJSDocInfo(jsDocInfo.build());
 
     exportMap.clear();
+    exportedMap.clear();
     compiler.reportCodeChange();
   }
 
@@ -424,6 +439,91 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
                 varNode);
           }
         });
+  }
+
+  /**
+   * Find assignments to exported local variables and
+   * <ol>
+   *   <li>unflag 'isConst' of exported name in exportMap.
+   *   <li>wrap assignment with assignment to module namespace property.
+   *     Eg: "foo = newValue" where "export {foo as bar}"
+   *     to "moduleName.bar = foo = newValue".
+   * </ol>
+   */
+  private class ProcessAssignmentToExportedVar extends AbstractPostOrderCallback {
+    private final String moduleName;
+
+    ProcessAssignmentToExportedVar(String moduleName) {
+      this.moduleName = moduleName;
+    }
+
+    @Override
+    public void visit(NodeTraversal t, Node n, Node parent) {
+      if (t.getScope().isGlobal()) {
+        return;
+      }
+
+      if (!n.isName()) {
+        return;
+      }
+
+      String localName = n.getString();
+      Var var = t.getScope().getVar(localName);
+      if (var == null || !var.isGlobal()) {
+        return;
+      }
+
+      String exportedName = exportedMap.get(localName);
+      if (exportedName == null) {
+        return;
+      }
+
+      boolean isAssign = false;
+      boolean isPost = false;
+
+      if(NodeUtil.isAssignmentOp(parent)) {
+          isAssign = true;
+      } else if (parent.isInc() || parent.isDec()) {
+          isAssign = true;
+          isPost = parent.getBooleanProp(Node.INCRDECR_PROP);
+      }
+
+      if (isAssign) {
+        exportMap.get(exportedName).isConst = false;
+
+        Node placeholder = IR.empty();
+        Node grandparent = parent.getParent();
+        grandparent.replaceChild(parent, placeholder);
+
+        Node replacement = IR.assign(
+            IR.getprop(IR.name(moduleName), IR.string(exportedName)),
+            parent);
+
+        if(isPost) {
+          // special case for postfix increment/decrement.
+          //   foo++
+          //   ->
+          //   var foo$0;
+          //   (foo$0 = foo, module.foo = ++foo, foo$0)
+          String syntheticName = localName + "$" + compiler.getUniqueNameIdSupplier().get();
+          Node scopeNode = t.getScope().getRootNode();
+          scopeNode.addChildToFront(
+              IR.var(IR.name(syntheticName)).useSourceInfoIfMissingFromForTree(parent));
+
+          parent.putBooleanProp(Node.INCRDECR_PROP, false);
+
+          replacement = IR.comma(
+              IR.comma(
+                  IR.assign(IR.name(syntheticName), IR.name(localName)),
+                  replacement),
+              IR.name(syntheticName));
+        }
+
+        replacement.useSourceInfoIfMissingFromForTree(parent);
+
+        grandparent.replaceChild(placeholder, replacement);
+      }
+    }
   }
 
   /**
@@ -522,7 +622,7 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
             if (pair.originalName.isEmpty()) {
               typeNode.setString(pair.module + rest);
             } else {
-              typeNode.setString(baseName + "$$" + pair.module + rest);
+              typeNode.setString(pair.module + '.' + pair.originalName + rest);
             }
           }
           typeNode.putProp(Node.ORIGINALNAME_PROP, name);
@@ -555,10 +655,12 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
   private static class NameNodePair {
     final String name;
     final Node nodeForSourceInfo;
+    private boolean isConst;
 
     private NameNodePair(String name, Node nodeForSourceInfo) {
       this.name = name;
       this.nodeForSourceInfo = nodeForSourceInfo;
+      this.isConst = true;
     }
 
     @Override

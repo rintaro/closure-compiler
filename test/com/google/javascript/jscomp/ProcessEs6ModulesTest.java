@@ -145,23 +145,23 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
         LINE_JOINER.join(
             "goog.provide('module$testcode');",
             "var a$$module$testcode = 1, b$$module$testcode = 2;",
-            "module$testcode.a = a$$module$testcode;",
-            "module$testcode.b = b$$module$testcode;"));
+            "/** @const */module$testcode.a = a$$module$testcode;",
+            "/** @const */module$testcode.b = b$$module$testcode;"));
 
     testModules(
         "export var a; export var b;",
         LINE_JOINER.join(
             "goog.provide('module$testcode');",
             "var a$$module$testcode; var b$$module$testcode;",
-            "module$testcode.a = a$$module$testcode;",
-            "module$testcode.b = b$$module$testcode;"));
+            "/** @const */module$testcode.a = a$$module$testcode;",
+            "/** @const */module$testcode.b = b$$module$testcode;"));
 
     testModules(
         "export function f() {};",
         LINE_JOINER.join(
             "goog.provide('module$testcode');",
             "function f$$module$testcode() {}",
-            "module$testcode.f = f$$module$testcode;"));
+            "/** @const */module$testcode.f = f$$module$testcode;"));
 
     testModules(
         "export function f() {}; function g() { f(); }",
@@ -169,7 +169,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "goog.provide('module$testcode');",
             "function f$$module$testcode() {}",
             "function g$$module$testcode() { f$$module$testcode(); }",
-            "module$testcode.f = f$$module$testcode;"));
+            "/** @const */module$testcode.f = f$$module$testcode;"));
 
     testModules(
         LINE_JOINER.join("export function MyClass() {};", "MyClass.prototype.foo = function() {};"),
@@ -177,7 +177,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "goog.provide('module$testcode');",
             "function MyClass$$module$testcode() {}",
             "MyClass$$module$testcode.prototype.foo = function() {};",
-            "module$testcode.MyClass = MyClass$$module$testcode;"));
+            "/** @const */module$testcode.MyClass = MyClass$$module$testcode;"));
 
     testModules(
         "var f = 1; var b = 2; export {f as foo, b as bar};",
@@ -185,22 +185,22 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "goog.provide('module$testcode');",
             "var f$$module$testcode = 1;",
             "var b$$module$testcode = 2;",
-            "module$testcode.foo = f$$module$testcode;",
-            "module$testcode.bar = b$$module$testcode;"));
+            "/** @const */module$testcode.foo = f$$module$testcode;",
+            "/** @const */module$testcode.bar = b$$module$testcode;"));
 
     testModules(
         "var f = 1; export {f as default};",
         LINE_JOINER.join(
             "goog.provide('module$testcode');",
             "var f$$module$testcode = 1;",
-            "module$testcode.default = f$$module$testcode;"));
+            "/** @const */module$testcode.default = f$$module$testcode;"));
 
     testModules(
         "var f = 1; export {f as class};",
         LINE_JOINER.join(
             "goog.provide('module$testcode');",
             "var f$$module$testcode = 1;",
-            "module$testcode.class = f$$module$testcode;"));
+            "/** @const */module$testcode.class = f$$module$testcode;"));
   }
 
   public void testExportWithJsDoc() {
@@ -210,7 +210,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "goog.provide('module$testcode');",
             "/** @constructor */",
             "function F$$module$testcode() { return ''; }",
-            "module$testcode.F = F$$module$testcode"));
+            "/** @const */module$testcode.F = F$$module$testcode"));
 
     testModules(
         "/** @return {string} */ export function f() { return '';}",
@@ -218,7 +218,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "goog.provide('module$testcode');",
             "/** @return {string} */",
             "function f$$module$testcode() { return ''; }",
-            "module$testcode.f = f$$module$testcode"));
+            "/** @const */module$testcode.f = f$$module$testcode"));
 
     testModules(
         "/** @return {string} */ export var f = function() { return '';}",
@@ -226,7 +226,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "goog.provide('module$testcode');",
             "/** @return {string} */",
             "var f$$module$testcode = function() { return ''; }",
-            "module$testcode.f = f$$module$testcode"));
+            "/** @const */module$testcode.f = f$$module$testcode"));
 
     testModules(
         "/** @type {number} */ export var x = 3",
@@ -234,7 +234,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "goog.provide('module$testcode');",
             "/** @type {number} */",
             "var x$$module$testcode = 3;",
-            "module$testcode.x = x$$module$testcode"));
+            "/** @const */module$testcode.x = x$$module$testcode"));
   }
 
   public void testImportAndExport() {
@@ -244,7 +244,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "goog.provide('module$testcode');",
             "goog.require('module$other');",
             "use(module$other.name);",
-            "module$testcode.name = module$other.name;"));
+            "/** @const */module$testcode.name = module$other.name;"));
   }
 
   public void testExportFrom() {
@@ -256,26 +256,26 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
         LINE_JOINER.join(
             "goog.provide('module$testcode');",
             "goog.require('module$other');",
-            "module$testcode.name = module$other.name;",
-            "module$testcode.default = module$other.default;",
-            "module$testcode.class = module$other.class;"));
+            "/** @const */module$testcode.name = module$other.name;",
+            "/** @const */module$testcode.default = module$other.default;",
+            "/** @const */module$testcode.class = module$other.class;"));
 
     testModules(
         "export {a, b as c, d} from 'other';",
         LINE_JOINER.join(
             "goog.provide('module$testcode');",
             "goog.require('module$other');",
-            "module$testcode.a = module$other.a;",
-            "module$testcode.c = module$other.b;",
-            "module$testcode.d = module$other.d;"));
+            "/** @const */module$testcode.a = module$other.a;",
+            "/** @const */module$testcode.c = module$other.b;",
+            "/** @const */module$testcode.d = module$other.d;"));
 
     testModules(
         "export {a as b, b as a} from 'other';",
         LINE_JOINER.join(
             "goog.provide('module$testcode');",
             "goog.require('module$other');",
-            "module$testcode.b = module$other.a;",
-            "module$testcode.a = module$other.b;"));
+            "/** @const */module$testcode.b = module$other.a;",
+            "/** @const */module$testcode.a = module$other.b;"));
 
     testModules(
         LINE_JOINER.join(
@@ -285,10 +285,10 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
         LINE_JOINER.join(
             "goog.provide('module$testcode');",
             "goog.require('module$other');",
-            "module$testcode.a = module$other.default;",
-            "module$testcode.a2 = module$other.a;",
-            "module$testcode.b = module$other.default;",
-            "module$testcode.switch = module$other.class;"));
+            "/** @const */module$testcode.a = module$other.default;",
+            "/** @const */module$testcode.a2 = module$other.a;",
+            "/** @const */module$testcode.b = module$other.default;",
+            "/** @const */module$testcode.switch = module$other.class;"));
   }
 
   public void testExportDefault() {
@@ -297,7 +297,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
         LINE_JOINER.join(
             "goog.provide('module$testcode');",
             "var $jscompDefaultExport$$module$testcode = 'someString';",
-            "module$testcode.default = $jscompDefaultExport$$module$testcode;"));
+            "/** @const */module$testcode.default = $jscompDefaultExport$$module$testcode;"));
 
     testModules(
         "var x = 5; export default x;",
@@ -305,7 +305,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "goog.provide('module$testcode');",
             "var x$$module$testcode = 5;",
             "var $jscompDefaultExport$$module$testcode = x$$module$testcode;",
-            "module$testcode.default = $jscompDefaultExport$$module$testcode;"));
+            "/** @const */module$testcode.default = $jscompDefaultExport$$module$testcode;"));
 
     testModules(
         "export default function f(){}; var x = f();",
@@ -313,7 +313,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "goog.provide('module$testcode');",
             "function f$$module$testcode() {}",
             "var x$$module$testcode = f$$module$testcode();",
-            "module$testcode.default = f$$module$testcode;"));
+            "/** @const */module$testcode.default = f$$module$testcode;"));
 
     testModules(
         "export default class Foo {}; var x = new Foo;",
@@ -321,7 +321,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "goog.provide('module$testcode');",
             "class Foo$$module$testcode {}",
             "var x$$module$testcode = new Foo$$module$testcode;",
-            "module$testcode.default = Foo$$module$testcode;"));
+            "/** @const */module$testcode.default = Foo$$module$testcode;"));
   }
 
   public void testExportDefault_anonymous() {
@@ -330,14 +330,14 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
         LINE_JOINER.join(
             "goog.provide('module$testcode');",
             "var $jscompDefaultExport$$module$testcode = class {};",
-            "module$testcode.default = $jscompDefaultExport$$module$testcode;"));
+            "/** @const */module$testcode.default = $jscompDefaultExport$$module$testcode;"));
 
     testModules(
         "export default function() {}",
         LINE_JOINER.join(
             "goog.provide('module$testcode');",
             "var $jscompDefaultExport$$module$testcode = function() {}",
-            "module$testcode.default = $jscompDefaultExport$$module$testcode;"));
+            "/** @const */module$testcode.default = $jscompDefaultExport$$module$testcode;"));
   }
 
   public void testExtendImportedClass() {
@@ -351,7 +351,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
         LINE_JOINER.join(
             "goog.require('module$other');",
             "class Child$$module$testcode extends module$other.Parent {",
-            "  /** @param {Parent$$module$other} parent */",
+            "  /** @param {module$other.Parent} parent */",
             "  useParent(parent) {}",
             "}"));
 
@@ -380,7 +380,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "goog.provide('module$testcode');",
             "goog.require('module$other');",
             "class Child$$module$testcode extends module$other.Parent {",
-            "  /** @param {Parent$$module$other} parent */",
+            "  /** @param {module$other.Parent} parent */",
             "  useParent(parent) {}",
             "}",
             "/** @const */ module$testcode.Child = Child$$module$testcode;"));
@@ -476,7 +476,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "goog.provide('module$testcode');",
             "goog.require('foo.bar');",
             "var x$$module$testcode;",
-            "module$testcode.x = x$$module$testcode"));
+            "/** @const */module$testcode.x = x$$module$testcode"));
 
     testModules(
         "export var x; goog.require('foo.bar');",
@@ -484,7 +484,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "goog.provide('module$testcode');",
             "var x$$module$testcode;",
             "goog.require('foo.bar');",
-            "module$testcode.x = x$$module$testcode"));
+            "/** @const */module$testcode.x = x$$module$testcode"));
 
     testModules(
         "import * as s from 'other'; goog.require('foo.bar');",
@@ -503,7 +503,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "goog.require('foo.bar');",
             "const bar$$module$testcode = foo.bar;",
             "var x$$module$testcode;",
-            "module$testcode.x = x$$module$testcode"));
+            "/** @const */module$testcode.x = x$$module$testcode"));
 
     testModules(
         "export var x; const bar = goog.require('foo.bar');",
@@ -512,7 +512,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "var x$$module$testcode;",
             "goog.require('foo.bar');",
             "const bar$$module$testcode = foo.bar;",
-            "module$testcode.x = x$$module$testcode"));
+            "/** @const */module$testcode.x = x$$module$testcode"));
 
     testModules(
         "import * as s from 'other'; const bar = goog.require('foo.bar');",
@@ -575,5 +575,72 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "let {foo, bar} = goog.require('some.name.space');",
             "use(foo, bar);"),
         LHS_OF_GOOG_REQUIRE_MUST_BE_CONST);
+  }
+
+  public void testExport_mutable() {
+      testModules(
+          LINE_JOINER.join(
+              "export var foo = 1;",
+              "foo = 2",
+              "function fn1() { use(foo += 12) }",
+              "function fn2() { use(foo = 23) }",
+              "function fn3() { use(++foo) }",
+              "function fn4() { use(foo++) }"),
+          LINE_JOINER.join(
+              "goog.provide('module$testcode')",
+              "var foo$$module$testcode = 1;",
+              "foo$$module$testcode = 2;",
+              "function fn1$$module$testcode() { use(module$testcode.foo = foo$$module$testcode += 12) }",
+              "function fn2$$module$testcode() { use(module$testcode.foo = foo$$module$testcode = 23) }",
+              "function fn3$$module$testcode() { use(module$testcode.foo = ++foo$$module$testcode) }",
+              "function fn4$$module$testcode() {",
+                  "var foo$0;",
+                  "use((foo$0 = foo$$module$testcode, module$testcode.foo = ++foo$$module$testcode, foo$0));",
+              "}",
+              "module$testcode.foo = foo$$module$testcode"));
+
+      testModules(
+          LINE_JOINER.join(
+              "var foo = 1;",
+              "export {foo as bar};",
+              "foo = 2;",
+              "function fn1() { use(foo += 12) }",
+              "function fn2() { use(foo = 23) }",
+              "function fn3() { use(++foo) }",
+              "function fn4() { use(foo++) }"),
+          LINE_JOINER.join(
+              "goog.provide('module$testcode');",
+              "var foo$$module$testcode = 1;",
+              "foo$$module$testcode = 2;",
+              "function fn1$$module$testcode() { use(module$testcode.bar = foo$$module$testcode += 12) }",
+              "function fn2$$module$testcode() { use(module$testcode.bar = foo$$module$testcode = 23) }",
+              "function fn3$$module$testcode() { use(module$testcode.bar = ++foo$$module$testcode) }",
+              "function fn4$$module$testcode() {",
+                  "var foo$0;",
+                  "use((foo$0 = foo$$module$testcode, module$testcode.bar = ++foo$$module$testcode, foo$0));",
+              "}",
+              "module$testcode.bar = foo$$module$testcode;"));
+
+      testModules(
+          LINE_JOINER.join(
+              "export function foo() {}",
+              "function fn1() { foo = function() {} }"),
+          LINE_JOINER.join(
+              "goog.provide('module$testcode');",
+              "function foo$$module$testcode() {}",
+              "function fn1$$module$testcode() { module$testcode.foo = foo$$module$testcode = function() {} }",
+              "module$testcode.foo = foo$$module$testcode;"));
+
+      testModules(
+          LINE_JOINER.join(
+              "var foo = 1;",
+              "export default foo;",
+              "function fn1() { use(foo = 2) }"),
+          LINE_JOINER.join(
+              "goog.provide('module$testcode');",
+              "var foo$$module$testcode = 1;",
+              "var $jscompDefaultExport$$module$testcode = foo$$module$testcode",
+              "function fn1$$module$testcode() { use(foo$$module$testcode = 2) }",
+              "/** @const */ module$testcode.default = $jscompDefaultExport$$module$testcode"));
   }
 }
