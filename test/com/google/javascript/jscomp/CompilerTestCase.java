@@ -1068,6 +1068,7 @@ public abstract class CompilerTestCase extends TestCase {
     ErrorManager[] errorManagers = new ErrorManager[numRepetitions];
     int aggregateWarningCount = 0;
     List<JSError> aggregateWarnings = new ArrayList<>();
+    recentChange.reset();
     boolean hasCodeChanged = false;
 
     for (int i = 0; i < numRepetitions; ++i) {

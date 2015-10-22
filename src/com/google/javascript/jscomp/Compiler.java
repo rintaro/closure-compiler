@@ -1460,15 +1460,38 @@ public class Compiler extends AbstractCompiler {
     rebuildInputsFromModules();
   }
 
+  /**
+   * Process ES6 module export/import and rewrites references to imported name
+   * to original names.
+   */
   void processEs6Modules() {
     ES6ModuleLoader loader = new ES6ModuleLoader(options.moduleRoots, inputs);
+    Es6ModuleRegistry registry = new Es6ModuleRegistry(loader);
+
+    // parse
     for (CompilerInput input : inputs) {
+      Es6ParseModule parse = new Es6ParseModule(this);
       input.setCompiler(this);
       Node root = input.getAstRoot(this);
       if (root == null) {
         continue;
       }
-      new ProcessEs6Modules(this, loader, true).processFile(root);
+      parse.processFile(root);
+      registry.addModule(input, parse.moduleRequests, parse.importEntries, parse.exportEntries);
+    }
+
+    // resolve module dependencies
+    registry.instantiateAllModules(this);
+    if(hasErrors()) {
+      return;
+    }
+
+    // rewrite
+    for (Es6Module module : registry.getModules()) {
+      Es6ModuleRewrite rewrite = new Es6ModuleRewrite(this, registry, module);
+      CompilerInput input = module.getInput();
+      Node root = input.getAstRoot(this);
+      rewrite.process(root);
     }
   }
 
