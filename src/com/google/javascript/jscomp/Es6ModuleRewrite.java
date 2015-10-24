@@ -83,7 +83,7 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
     this.module = module;
   }
 
-  public void process(Node root) {
+  public void processFile(Node root) {
     Preconditions.checkArgument(root.isScript() &&
         compiler.getInput(root.getInputId()) == module.getInput());
     NodeTraversal.traverseEs6(compiler, root, this);
@@ -216,10 +216,11 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
    */
   private void visitGetProp(NodeTraversal t, Node n, Node parent) {
     Node target = n.getFirstChild();
-    if (target.isName() && target.getString().startsWith(Es6ModuleRegistry.MODULE_NAME_PREFIX)) {
+    if (target.isName() &&
+        target.getString().startsWith(Es6ModuleRegistry.MODULE_NAME_PREFIX)) {
       if (NodeUtil.isAssignmentTarget(n)) {
-        // Module exotic object is not extensible.
-        // All properties on module exotic object are immutable.
+        // Module namespace exotic object is not extensible.
+        // All properties on module namespace exotic object are immutable.
         t.report(n, MODULE_NAMESPACE_ASSIGNMENT);
         return;
       }
@@ -262,9 +263,18 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
   }
 
   /**
-   * We support special syntax in JSDoc types.
+   * fix JSDoc type nodes as the same manner.
+   * 
+   * Also, we support special syntax in JSDoc types.
    * If the type name looks like relative path, then we treat
-   * "string before first period after last slash" as a module identifier.
+   * "string before first period after last slash" as a ModuleSpecifier
+   * 
+   * <code>
+   * @type {./path/to.the/module.NAME}
+   *        ^^^^^^^^^^^^^^^^^^^^ moduleSpecifier
+   * </code>
+   *
+   * Note that this syntax doesn't affect the module depenencies graph.
    */
   private void fixTypeNode(NodeTraversal t, Node n) {
     for (Node child = n.getFirstChild(); child != null;
@@ -294,7 +304,7 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
       String required = name.substring(0, endIndex);
       Es6Module mod = moduleRegistry.resolveImportedModule(module, required);
       if (mod == null) {
-        // Since JSDocs are not processed in Es6ModuleRegistry.instantiateAllModules(),
+        // Since JSDocs are not processed in Es6ModuleRegistry#instantiateAllModules(),
         // this module may be unresolvable.
         t.report(n, ES6ModuleLoader.LOAD_ERROR, required);
         return;

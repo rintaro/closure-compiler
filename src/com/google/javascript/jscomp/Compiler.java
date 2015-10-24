@@ -1466,7 +1466,7 @@ public class Compiler extends AbstractCompiler {
    */
   void processEs6Modules() {
     ES6ModuleLoader loader = new ES6ModuleLoader(options.moduleRoots, inputs);
-    Es6ModuleRegistry registry = new Es6ModuleRegistry(loader);
+    Es6ModuleRegistry registry = new Es6ModuleRegistry(this, loader);
 
     // parse
     for (CompilerInput input : inputs) {
@@ -1481,7 +1481,7 @@ public class Compiler extends AbstractCompiler {
     }
 
     // resolve module dependencies
-    registry.instantiateAllModules(this);
+    registry.instantiateAllModules();
     if(hasErrors()) {
       return;
     }
@@ -1491,7 +1491,7 @@ public class Compiler extends AbstractCompiler {
       Es6ModuleRewrite rewrite = new Es6ModuleRewrite(this, registry, module);
       CompilerInput input = module.getInput();
       Node root = input.getAstRoot(this);
-      rewrite.process(root);
+      rewrite.processFile(root);
     }
   }
 

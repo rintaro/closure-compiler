@@ -38,6 +38,14 @@ import java.util.LinkedHashSet;
  */
 public final class Es6ParseModule extends AbstractShallowCallback {
 
+  static final DiagnosticType EXPORTED_BINDING_NOT_DECLARED  = DiagnosticType.error(
+      "JSC_ES6_EXPORTED_BINDING_NOT_DECLARED",
+      "Exporting local name \"{0}\" is not declared.");
+
+  static final DiagnosticType EXPORTED_NAME_DUPLICATED = DiagnosticType.error(
+      "JSC_ES6_EXPORTED_NAME_DUPLICATED",
+      "Redeclared export name: {0}");
+
   private static final String DEFAULT_VAR_NAME = "$jscompDefaultExport";
   private static final String DEFAULT_EXPORT_NAME = "default";
   private final AbstractCompiler compiler;
@@ -175,15 +183,21 @@ public final class Es6ParseModule extends AbstractShallowCallback {
       Node moduleRequest = export.getChildCount() == 2
           ? export.getLastChild()
           : null;
+      Scope scope = t.getScope();
       for (Node exportSpec : export.getFirstChild().children()) {
-        // TODO: Error if any element of the ExportedBindings of ModuleItemList
-        // does not also occur in either the VarDeclaredNames of ModuleItemList,
-        // or the LexicallyDeclaredNames of ModuleItemList.
-        // http://www.ecma-international.org/ecma-262/6.0/#sec-module-semantics-static-semantics-early-errors
         Node origName = exportSpec.getFirstChild();
         Node exportName = exportSpec.getChildCount() == 2
             ? exportSpec.getLastChild()
             : origName;
+
+        if (moduleRequest == null) {
+          Var v = scope.getVar(origName.getString());
+          if (v == null || !v.isGlobal()) {
+            // Error if any element of the ExportedBinding of this
+            // ExportSpecifier is not declared.
+            t.report(origName, EXPORTED_BINDING_NOT_DECLARED, origName.getString());
+          }
+        }
         addExportEntry(exportName, moduleRequest, origName);
       }
       if(moduleRequest != null) {
@@ -205,12 +219,13 @@ public final class Es6ParseModule extends AbstractShallowCallback {
         }
         Var v = t.getScope().getVar(localName.getString());
 
-        if (v == null || v.isGlobal()) {
-          // Clone because this name may be rewritten by setString()
-          // in Es6ModuleRewrite.
-          localName = localName.cloneNode();
-          addExportEntry(localName, null, localName);
-        }
+        // If `v` is already declared, it would be an error
+        // caught in VariableReferenceCheck.
+
+        localName = localName.cloneNode();
+        // Clone because this name may be rewritten by setString()
+        // in Es6ModuleRewrite.
+        addExportEntry(localName, null, localName);
       }
 
       // Extract declaration from the export statement.

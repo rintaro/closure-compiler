@@ -300,7 +300,7 @@ class Es6Module {
     private final Node localName;
 
     public ImportEntry(Node moduleRequest, Node importName, Node localName) {
-      Preconditions.checkArgument(moduleRequest != null);
+      Preconditions.checkArgument(moduleRequest != null && localName != null);
       this.moduleRequest = moduleRequest;
       this.importName = importName;
       this.localName = localName;

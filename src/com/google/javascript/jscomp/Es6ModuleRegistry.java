@@ -39,16 +39,27 @@ import java.util.LinkedHashMap;
  */
 class Es6ModuleRegistry {
 
+  static final DiagnosticType DUPLICATED_IMPORTED_BOUND_NAMES = DiagnosticType.error(
+      "JSC_ES6_DUPLICATED_IMPORTED_BOUND_NAMES",
+      "Duplicated imported bound name: {0}");
+
+  static final DiagnosticType DUPLICATED_EXPORT_NAMES = DiagnosticType.error(
+      "JSC_ES6_DUPLICATED_EXPORT_NAMES",
+      "Duplicated export name: {0}");
+
   static final DiagnosticType RESOLVE_EXPORT_FAILURE = DiagnosticType.error(
       "JSC_ES6_RESOLVE_EXPORT_FAILURE",
       "Failed to resolve exported name \"{1}\" in module \"{0}\"");
 
   public static String MODULE_NAME_PREFIX = "module$";
 
+  // For error reporting.
+  private AbstractCompiler compiler;
   private ES6ModuleLoader loader;
   private BiMap<String, Es6Module> moduleMap = HashBiMap.create();
 
-  public Es6ModuleRegistry(ES6ModuleLoader loader) {
+  public Es6ModuleRegistry(AbstractCompiler compiler, ES6ModuleLoader loader) {
+    this.compiler = compiler;
     this.loader = loader;
   }
 
@@ -63,23 +74,30 @@ class Es6ModuleRegistry {
     Preconditions.checkState(!moduleMap.containsKey(moduleName));
 
     Map<String, ImportEntry> importEntryMap = new LinkedHashMap<>();
+    Set<String> exportedNames = new HashSet<>();
     List<ExportEntry> indirectExportEntries = new ArrayList<>();
     List<ExportEntry> localExportEntries = new ArrayList<>();
     List<ExportEntry> starExportEntries = new ArrayList<>();
 
     for (ImportEntry ie : importEntries) {
-      if(ie.getLocalName() != null) {
-        // TODO: Error if the BoundNames of ImportDeclaration
-        // contains any duplicate entries
-        // http://www.ecma-international.org/ecma-262/6.0/#sec-module-semantics-static-semantics-early-errors
-        importEntryMap.put(ie.getLocalName(), ie);
+      // Error if the BoundNames of ImportDeclaration
+      // contains any duplicate entries
+      // http://www.ecma-international.org/ecma-262/6.0/#sec-imports-static-semantics-early-errors
+      if (importEntryMap.put(ie.getLocalName(), ie) != null) {
+        compiler.report(JSError.make(ie.getLocalNameNode(),
+              DUPLICATED_IMPORTED_BOUND_NAMES, ie.getLocalName()));
       }
     }
 
     for (ExportEntry ee : exportEntries) {
-      // TODO: Error if the ExportedNames of ModuleItemList contains
-      // any duplicate entries
+      String exportName = ee.getExportName();
+      // Error if the ExportedNames of ExportDeclaration
+      // contains any duplicate entries
       // http://www.ecma-international.org/ecma-262/6.0/#sec-module-semantics-static-semantics-early-errors
+      if (exportName != null && !exportedNames.add(exportName)) {
+        compiler.report(JSError.make(ee.getExportNameNode(),
+              DUPLICATED_EXPORT_NAMES, exportName));
+      }
       if (ee.getModuleRequestNode() == null) {
         ImportEntry ie = importEntryMap.get(ee.getLocalName());
         if (ie == null) {
@@ -127,7 +145,7 @@ class Es6ModuleRegistry {
    *
    * @see "http://www.ecma-international.org/ecma-262/6.0/#sec-moduledeclarationinstantiation"
    */
-  public void instantiateAllModules(AbstractCompiler compiler) {
+  public void instantiateAllModules() {
 
     Set<String> nonModules = new HashSet<>(moduleMap.keySet());
 
