@@ -86,6 +86,10 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
   public void processFile(Node root) {
     Preconditions.checkArgument(root.isScript() &&
         compiler.getInput(root.getInputId()) == module.getInput());
+
+    // Need to rewriteRequires before renaming variables.
+    rewriteRequires(root);
+
     NodeTraversal.traverseEs6(compiler, root, this);
     // We unconditionally call reportCodeChange() because
     // the tree is always modified in visitScript().
@@ -382,7 +386,6 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
    */
   private void visitScript(NodeTraversal t, Node n) {
     checkStrictModeDirective(t, n);
-    rewriteRequires(n);
 
     JSDocInfoBuilder jsDocInfo = n.getJSDocInfo() == null
         ? new JSDocInfoBuilder(false)

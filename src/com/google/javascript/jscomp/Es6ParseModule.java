@@ -19,6 +19,7 @@ import com.google.common.base.Preconditions;
 import com.google.javascript.jscomp.NodeTraversal.AbstractShallowCallback;
 import com.google.javascript.jscomp.Es6Module.ImportEntry;
 import com.google.javascript.jscomp.Es6Module.ExportEntry;
+import com.google.javascript.jscomp.ProcessCommonJSModules.FindGoogProvideOrGoogModule;
 import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
@@ -75,6 +76,13 @@ public final class Es6ParseModule extends AbstractShallowCallback {
   public void processFile(Node root) {
     Preconditions.checkArgument(root.isScript(),
         "Es6ParseModule supports only one invocation per CompilerInput node");
+
+    FindGoogProvideOrGoogModule finder = new FindGoogProvideOrGoogModule();
+    NodeTraversal.traverseEs6(compiler, root, finder);
+    if (finder.isFound()) {
+      return;
+    }
+
     NodeTraversal.traverseEs6(compiler, root, this);
   }
 
