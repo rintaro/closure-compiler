@@ -32,19 +32,28 @@ import java.util.HashMap;
 /**
  * Represents subset of ES6 Source Text Module Record.
  *
- * see: http://www.ecma-international.org/ecma-262/6.0/index.html#sec-source-text-module-records
+ * @see "http://www.ecma-international.org/ecma-262/6.0/index.html#sec-source-text-module-records"
  */
 class Es6Module {
 
+  // Registry this module belongs to
   private Es6ModuleRegistry registry;
+  // Source input
   private CompilerInput input;
+  // All the ModuleSpecifier string nodes used by this module
   private List<Node> requestedModules;
+  // Maps imported localName to ImportEntry records
   private Map<String, ImportEntry> importEntryMap;
+  // ExportEntry records that correspond to declarations within the module
   private List<ExportEntry> localExportEntries;
+  // ExportEntry records that correspond to reexported imports
   private List<ExportEntry> indirectExportEntries;
+  // ExportEntry records correspond to export * declarations
   private List<ExportEntry> starExportEntries;
 
+  // The Module Namespace Object if one has been created, or null
   private Namespace namespace;
+  // Cached results of #resolveExport(String)
   private Map<String, ModuleNamePair> resolvedExportMap;
 
   public Es6Module(
@@ -103,8 +112,8 @@ class Es6Module {
   }
 
   /**
-   * Laizly create and returns "module namespace exotic object" of
-   * this module. This object does not have "default" key.
+   * Lazly create and returns "module namespace exotic object" of
+   * this module.
    */
   public Namespace getNamespace() {
     if(namespace == null) {
@@ -123,7 +132,7 @@ class Es6Module {
   /**
    * GetExportedNames( exportStarSet ) Concrete Method implementation.
    *
-   * http://www.ecma-international.org/ecma-262/6.0/#sec-getexportednames
+   * @see "http://www.ecma-international.org/ecma-262/6.0/#sec-getexportednames"
    */
   private Set<String> getExportedNames(Set<Es6Module> exportStarSet) {
 
@@ -157,6 +166,8 @@ class Es6Module {
 
   /**
    * Cached exportName resolution.
+   * 
+   * @see #resolveExport(String, Set<ModuleNamePair>, Set<Es6Module)
    */
   public ModuleNamePair resolveExport(String exportName) {
     if (!resolvedExportMap.containsKey(exportName)) {
@@ -177,7 +188,7 @@ class Es6Module {
    * ResolveExport(exportName, resolveSet, exportStarSet) Concrete Method
    * implementation.
    *
-   * see: http://www.ecma-international.org/ecma-262/6.0/#sec-resolveexport
+   * @see "http://www.ecma-international.org/ecma-262/6.0/#sec-resolveexport"
    */
   private ModuleNamePair resolveExport(String exportName,
     Set<ModuleNamePair> resolveSet, Set<Es6Module> exportStarSet) {
@@ -218,7 +229,7 @@ class Es6Module {
 
     if("default".equals(exportName)) {
       // A default export was not explicitly defined by this module.
-      // NOTE A `default` export cannot be provided by an `export *`.
+      // Note: A `default` export cannot be provided by an `export *`.
       return null;
     }
 
@@ -274,9 +285,9 @@ class Es6Module {
   }
 
   /**
-   * Represents ES6 ImportEntry Record.
+   * Represents ImportEntry Record.
    *
-   * see: http://www.ecma-international.org/ecma-262/6.0/index.html#table-39
+   * @see  "http://www.ecma-international.org/ecma-262/6.0/index.html#table-39"
    */
   public static class ImportEntry {
     // ModuleSpecifier of ImportDeclaration
@@ -285,7 +296,7 @@ class Es6Module {
     // `null` indicates namespace object.
     private final Node importName;
     // name for access the imported value from importing module.
-    // `null` indicates no imported names. Eg: import from "mod"
+    // `null` indicates no imported names. Eg: import "moduleSpecifier"
     private final Node localName;
 
     public ImportEntry(Node moduleRequest, Node importName, Node localName) {
@@ -322,9 +333,9 @@ class Es6Module {
   }
 
   /**
-   * Represents ES6 ExportEntry Record.
+   * Represents ExportEntry Record.
    *
-   * see: http://www.ecma-international.org/ecma-262/6.0/index.html#table-41
+   * @see  "http://www.ecma-international.org/ecma-262/6.0/index.html#table-41"
    */
   public static class ExportEntry {
     // name of this export entry
@@ -379,7 +390,7 @@ class Es6Module {
   }
 
   /**
-   * Represents ES6 module.ResolveExport result record, or resolveSet item record.
+   * Represents module.ResolveExport result record, or resolveSet item record.
    *
    * result record: {[[module]]: Module Record, [[bindingName]]: String}
    * resolveSet item: {[[module]]: Module Record, [[exportName]]: String}

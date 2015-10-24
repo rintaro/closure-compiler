@@ -116,7 +116,7 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
    * Rewrites global {@code this} into {@code undefined}.
    * Global `this` value in Module Environment Record is always `undefined`.
    *
-   * see: http://www.ecma-international.org/ecma-262/6.0/#sec-module-environment-records-getthisbinding
+   * @see "http://www.ecma-international.org/ecma-262/6.0/#sec-module-environment-records-getthisbinding"
    */
   private void visitThis(NodeTraversal t, Node n, Node parent) {
     if(t.getScope().isGlobal()) {
@@ -141,7 +141,10 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
    *   <li>rename variables declared in this file so that we can safely
    *   concatenate inputs.</li>
    *   <li>resolve imported name and replace them with its original name.</li>
+   *   <li>emits an error when detecting assignment to imported binding.</li>
    * </ul>
+   *
+   * @see "http://www.ecma-international.org/ecma-262/6.0/#sec-createimportbinding"
    */
   private void visitName(NodeTraversal t, Node n, Node parent) {
     String name = n.getString();
@@ -159,7 +162,6 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
         // Replace imporeted bindings with original bindings.
         if (NodeUtil.isAssignmentTarget(n)) {
           // All imported bindings are immutable.
-          // see: http://www.ecma-international.org/ecma-262/6.0/#sec-createimportbinding
           t.report(n, IMPORTED_BINDING_ASSIGNMENT);
           return;
         }
@@ -206,6 +208,11 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
    * -> module$mod3.foo         // iteration2
    * -> foo$$module$mod3        // iteration3
    * </code>
+   *
+   * Also, emits an error when detects assignment to properties.
+   *
+   * @see "http://www.ecma-international.org/ecma-262/6.0/#sec-module-namespace-exotic-objects-set-p-v-receiver"
+   * @see "http://www.ecma-international.org/ecma-262/6.0/#sec-module-namespace-exotic-objects-isextensible"
    */
   private void visitGetProp(NodeTraversal t, Node n, Node parent) {
     Node target = n.getFirstChild();
@@ -213,9 +220,6 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
       if (NodeUtil.isAssignmentTarget(n)) {
         // Module exotic object is not extensible.
         // All properties on module exotic object are immutable.
-        // see:
-        //   http://www.ecma-international.org/ecma-262/6.0/#sec-module-namespace-exotic-objects-set-p-v-receiver
-        //   http://www.ecma-international.org/ecma-262/6.0/#sec-module-namespace-exotic-objects-isextensible
         t.report(n, MODULE_NAMESPACE_ASSIGNMENT);
         return;
       }

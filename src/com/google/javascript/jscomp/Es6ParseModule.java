@@ -34,7 +34,7 @@ import java.util.LinkedHashSet;
  * Also rewrites ExportDeclaration into normal declarations, and remove
  * ImportDeclaration from the tree.
  *
- * see: http://www.ecma-international.org/ecma-262/6.0/index.html#sec-source-text-module-records
+ * @see "http://www.ecma-international.org/ecma-262/6.0/index.html#sec-source-text-module-records"
  */
 public final class Es6ParseModule extends AbstractShallowCallback {
 
@@ -59,10 +59,10 @@ public final class Es6ParseModule extends AbstractShallowCallback {
   }
 
   /**
-   * Process tree of single source input and collect ModureRequests,
+   * Process tree of single source input and collect ModuleRequests,
    * ExportEntry and ImportEntry.
    *
-   * see: http://www.ecma-international.org/ecma-262/6.0/#sec-parsemodule
+   * @see "http://www.ecma-international.org/ecma-262/6.0/#sec-parsemodule"
    */
   public void processFile(Node root) {
     Preconditions.checkArgument(root.isScript(),
@@ -176,6 +176,10 @@ public final class Es6ParseModule extends AbstractShallowCallback {
           ? export.getLastChild()
           : null;
       for (Node exportSpec : export.getFirstChild().children()) {
+        // TODO: Error if any element of the ExportedBindings of ModuleItemList
+        // does not also occur in either the VarDeclaredNames of ModuleItemList,
+        // or the LexicallyDeclaredNames of ModuleItemList.
+        // http://www.ecma-international.org/ecma-262/6.0/#sec-module-semantics-static-semantics-early-errors
         Node origName = exportSpec.getFirstChild();
         Node exportName = exportSpec.getChildCount() == 2
             ? exportSpec.getLastChild()
@@ -211,7 +215,8 @@ public final class Es6ParseModule extends AbstractShallowCallback {
 
       // Extract declaration from the export statement.
       //
-      //   export var Foo; -> var Foo;
+      //   export var Foo;
+      //   -> var Foo;
       declaration.setJSDocInfo(export.getJSDocInfo());
       export.setJSDocInfo(null);
       parent.addChildBefore(declaration.detachFromParent(), export);

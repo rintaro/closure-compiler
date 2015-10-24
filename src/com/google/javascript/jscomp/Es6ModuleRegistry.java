@@ -68,15 +68,18 @@ class Es6ModuleRegistry {
     List<ExportEntry> starExportEntries = new ArrayList<>();
 
     for (ImportEntry ie : importEntries) {
-
-      // TODO: what happen if we have duplicate localName?
-      //   Eg: var foo = 1; import foo from 'mod'; import foo from 'mod2';
       if(ie.getLocalName() != null) {
+        // TODO: Error if the BoundNames of ImportDeclaration
+        // contains any duplicate entries
+        // http://www.ecma-international.org/ecma-262/6.0/#sec-module-semantics-static-semantics-early-errors
         importEntryMap.put(ie.getLocalName(), ie);
       }
     }
 
     for (ExportEntry ee : exportEntries) {
+      // TODO: Error if the ExportedNames of ModuleItemList contains
+      // any duplicate entries
+      // http://www.ecma-international.org/ecma-262/6.0/#sec-module-semantics-static-semantics-early-errors
       if (ee.getModuleRequestNode() == null) {
         ImportEntry ie = importEntryMap.get(ee.getLocalName());
         if (ie == null) {
@@ -96,10 +99,12 @@ class Es6ModuleRegistry {
           // Note: According to the specification, "re-export of an
           // imported module namespace object" would be added to localExportEntries
           // But since we statically resolve module namespace object in
-          // {@code Es6RewriteGlobalVariables}, we put  to indirectExportEntries here.
-          // This againsts the specs:
+          // Es6ModuleRewrite, we put them into indirectExportEntries here.
           indirectExportEntries.add(
-              new ExportEntry(ee.getExportNameNode(), ie.getModuleRequestNode(), ie.getImportNameNode()));
+              new ExportEntry(
+                  ee.getExportNameNode(),
+                  ie.getModuleRequestNode(),
+                  ie.getImportNameNode()));
         }
       } else {
         if(ee.getImportName() == null) {
@@ -118,9 +123,9 @@ class Es6ModuleRegistry {
   }
 
   /**
-   * Partial impletation of ModuleDeclarationInstantiation().
+   * Rough impletation of ModuleDeclarationInstantiation() in ES6 specification.
    *
-   * see: http://www.ecma-international.org/ecma-262/6.0/#sec-moduledeclarationinstantiation
+   * @see "http://www.ecma-international.org/ecma-262/6.0/#sec-moduledeclarationinstantiation"
    */
   public void instantiateAllModules(AbstractCompiler compiler) {
 
@@ -202,7 +207,7 @@ class Es6ModuleRegistry {
    * HostResolveImportedModule (referencingModule, specifier )
    * implementation.
    *
-   * see: http://www.ecma-international.org/ecma-262/6.0/#sec-hostresolveimportedmodule
+   * @see "http://www.ecma-international.org/ecma-262/6.0/#sec-hostresolveimportedmodule"
    */
   public Es6Module resolveImportedModule(Es6Module module, String specifier) {
     URI loadAddress = loader.locateEs6Module(specifier, module.getInput());
