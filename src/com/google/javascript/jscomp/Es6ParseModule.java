@@ -15,12 +15,7 @@
  */
 package com.google.javascript.jscomp;
 
-import java.util.Set;
-import java.util.List;
-import java.util.LinkedList;
-import java.util.LinkedHashSet;
 import com.google.common.base.Preconditions;
-
 import com.google.javascript.jscomp.NodeTraversal.AbstractShallowCallback;
 import com.google.javascript.jscomp.Es6Module.ImportEntry;
 import com.google.javascript.jscomp.Es6Module.ExportEntry;
@@ -28,6 +23,11 @@ import com.google.javascript.rhino.IR;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.Token;
+
+import java.util.Set;
+import java.util.List;
+import java.util.LinkedList;
+import java.util.LinkedHashSet;
 
 /**
  * Collect ES6 ExportEntry and ImportEntry from module source file tree.

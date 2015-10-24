@@ -19,13 +19,13 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableSet;
+import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
+import com.google.javascript.jscomp.Es6Module.ImportEntry;
+import com.google.javascript.jscomp.Es6Module.ModuleNamePair;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.IR;
-import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
-import com.google.javascript.jscomp.Es6Module.ImportEntry;
-import com.google.javascript.jscomp.Es6Module.ModuleNamePair;
 
 import java.util.List;
 import java.util.Set;

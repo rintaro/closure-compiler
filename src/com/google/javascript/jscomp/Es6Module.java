@@ -15,6 +15,10 @@
  */
 package com.google.javascript.jscomp;
 
+import com.google.common.base.Objects;
+import com.google.common.base.Preconditions;
+import com.google.javascript.rhino.Node;
+
 import java.util.List;
 import java.util.Collection;
 import java.util.Set;
@@ -24,10 +28,6 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.HashMap;
 
-import com.google.common.base.Objects;
-import com.google.common.base.Preconditions;
-
-import com.google.javascript.rhino.Node;
 
 /**
  * Represents subset of ES6 Source Text Module Record.

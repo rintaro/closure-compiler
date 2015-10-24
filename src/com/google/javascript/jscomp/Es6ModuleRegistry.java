@@ -15,15 +15,6 @@
  */
 package com.google.javascript.jscomp;
 
-import java.net.URI;
-import java.util.List;
-import java.util.Set;
-import java.util.Map;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.LinkedHashMap;
-
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.BiMap;
@@ -32,6 +23,15 @@ import com.google.javascript.rhino.Node;
 import com.google.javascript.jscomp.Es6Module.ExportEntry;
 import com.google.javascript.jscomp.Es6Module.ImportEntry;
 import com.google.javascript.jscomp.Es6Module.ModuleNamePair;
+
+import java.net.URI;
+import java.util.List;
+import java.util.Set;
+import java.util.Map;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 
 /**
  * Holds all ES6Module objects in this compilation.
