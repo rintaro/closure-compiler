@@ -28,6 +28,11 @@ import com.google.javascript.rhino.Node;
 
 public final class ProcessEs6ModulesTest extends CompilerTestCase {
 
+  static final String FILE_OVERVIEW = LINE_JOINER.join(
+      "/** @fileoverview",
+      " * @suppress {missingProvide|missingRequire}",
+      " */");
+
   public ProcessEs6ModulesTest() {
     compareJsDoc = true;
   }
@@ -68,11 +73,10 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
     String fileName = test.getFilename() + ".js";
     ImmutableList<SourceFile> inputs =
         ImmutableList.of(SourceFile.fromCode("other.js", ""), SourceFile.fromCode(fileName, input));
-    String fileoverview = "/** @fileoverview\n * @suppress {missingProvide|missingRequire}\n */";
     ImmutableList<SourceFile> expecteds =
         ImmutableList.of(
             SourceFile.fromCode("other.js", ""),
-            SourceFile.fromCode(fileName, fileoverview + expected));
+            SourceFile.fromCode(fileName, FILE_OVERVIEW + expected));
     test.test(inputs, expecteds);
   }
 
@@ -100,452 +104,771 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
     testModules(this, input, error);
   }
 
-  public void testImport() {
-    testModules(
-        "import name from 'other'; use(name);",
-        "goog.require('module$other'); use(module$other.default);");
-
-    testModules("import {n as name} from 'other';", "goog.require('module$other');");
-
-    testModules(
-        "import x, {f as foo, b as bar} from 'other'; use(x);",
-        "goog.require('module$other'); use(module$other.default);");
-
-    testModules(
-        "import {default as name} from 'other'; use(name);",
-        "goog.require('module$other'); use(module$other.default);");
-
-    testModules(
-        "import {class as name} from 'other'; use(name);",
-        "goog.require('module$other'); use(module$other.class);");
-  }
-
-  public void testImport_missing() {
-    test(
-        "import name from 'module_does_not_exist'; use(name);",
-        null,
-        ES6ModuleLoader.LOAD_ERROR,
-        null);
-  }
-
-  public void testImportStar() {
-    testModules(
-        "import * as name from 'other'; use(name.foo);",
-        "goog.require('module$other'); use(module$other.foo)");
-  }
-
-  public void testTypeNodeRewriting() {
-    testModules(
-        "import * as name from 'other'; /** @type {name.foo} */ var x;",
-        "goog.require('module$other');"
-            + "/** @type {module$other.foo} */ var x$$module$testcode;");
+  private SourceFile source(String filename, String... lines) {
+    return SourceFile.fromCode(filename, LINE_JOINER.join(lines));
   }
 
   public void testExport() {
-    testModules(
+    test(
         "export var a = 1, b = 2;",
         LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "var a$$module$testcode = 1, b$$module$testcode = 2;",
-            "module$testcode.a = a$$module$testcode;",
-            "module$testcode.b = b$$module$testcode;"));
+            FILE_OVERVIEW,
+            "var a$$module$testcode = 1, b$$module$testcode = 2;"));
 
-    testModules(
+    test(
         "export var a; export var b;",
         LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "var a$$module$testcode; var b$$module$testcode;",
-            "module$testcode.a = a$$module$testcode;",
-            "module$testcode.b = b$$module$testcode;"));
+            FILE_OVERVIEW,
+            "var a$$module$testcode; var b$$module$testcode;"));
 
-    testModules(
+    test(
         "export function f() {};",
         LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "function f$$module$testcode() {}",
-            "module$testcode.f = f$$module$testcode;"));
+            FILE_OVERVIEW,
+            "function f$$module$testcode() {}"));
 
-    testModules(
+    test(
         "export function f() {}; function g() { f(); }",
         LINE_JOINER.join(
-            "goog.provide('module$testcode');",
+            FILE_OVERVIEW,
             "function f$$module$testcode() {}",
-            "function g$$module$testcode() { f$$module$testcode(); }",
-            "module$testcode.f = f$$module$testcode;"));
+            "function g$$module$testcode() { f$$module$testcode(); }"));
 
-    testModules(
-        LINE_JOINER.join("export function MyClass() {};", "MyClass.prototype.foo = function() {};"),
+    test(
         LINE_JOINER.join(
-            "goog.provide('module$testcode');",
+            "export function MyClass() {};",
+            "MyClass.prototype.foo = function() {};"),
+        LINE_JOINER.join(
+            FILE_OVERVIEW,
             "function MyClass$$module$testcode() {}",
-            "MyClass$$module$testcode.prototype.foo = function() {};",
-            "module$testcode.MyClass = MyClass$$module$testcode;"));
+            "MyClass$$module$testcode.prototype.foo = function() {};"));
 
-    testModules(
-        "var f = 1; var b = 2; export {f as foo, b as bar};",
+    test(
         LINE_JOINER.join(
-            "goog.provide('module$testcode');",
+            "var f = 1; var b = 2;",
+            "export {f as foo, b as bar};"),
+        LINE_JOINER.join(
+            FILE_OVERVIEW,
             "var f$$module$testcode = 1;",
-            "var b$$module$testcode = 2;",
-            "module$testcode.foo = f$$module$testcode;",
-            "module$testcode.bar = b$$module$testcode;"));
+            "var b$$module$testcode = 2;"));
 
-    testModules(
+    test(
         "var f = 1; export {f as default};",
         LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "var f$$module$testcode = 1;",
-            "module$testcode.default = f$$module$testcode;"));
+            FILE_OVERVIEW,
+            "var f$$module$testcode = 1;"));
 
-    testModules(
-        "var f = 1; export {f as class};",
+    test(
+        "export {name}; var name;",
         LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "var f$$module$testcode = 1;",
-            "module$testcode.class = f$$module$testcode;"));
+            FILE_OVERVIEW,
+            "var name$$module$testcode;"));
   }
 
   public void testExportWithJsDoc() {
-    testModules(
+    test(
         "/** @constructor */ export function F() { return '';}",
         LINE_JOINER.join(
-            "goog.provide('module$testcode');",
+            FILE_OVERVIEW,
             "/** @constructor */",
-            "function F$$module$testcode() { return ''; }",
-            "module$testcode.F = F$$module$testcode"));
+            "function F$$module$testcode() { return ''; }"));
 
-    testModules(
+    test(
         "/** @return {string} */ export function f() { return '';}",
         LINE_JOINER.join(
-            "goog.provide('module$testcode');",
+            FILE_OVERVIEW,
             "/** @return {string} */",
-            "function f$$module$testcode() { return ''; }",
-            "module$testcode.f = f$$module$testcode"));
+            "function f$$module$testcode() { return ''; }"));
 
-    testModules(
+    test(
         "/** @return {string} */ export var f = function() { return '';}",
         LINE_JOINER.join(
-            "goog.provide('module$testcode');",
+            FILE_OVERVIEW,
             "/** @return {string} */",
-            "var f$$module$testcode = function() { return ''; }",
-            "module$testcode.f = f$$module$testcode"));
+            "var f$$module$testcode = function() { return ''; }"));
 
-    testModules(
-        "/** @type {number} */ export var x = 3",
+    test(
+        "/** @type {number} */ export var x = 3, y, z = 2",
         LINE_JOINER.join(
-            "goog.provide('module$testcode');",
+            FILE_OVERVIEW,
             "/** @type {number} */",
-            "var x$$module$testcode = 3;",
-            "module$testcode.x = x$$module$testcode"));
-  }
-
-  public void testImportAndExport() {
-    testModules(
-        LINE_JOINER.join("import {name as n} from 'other';", "use(n);", "export {n as name};"),
-        LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "goog.require('module$other');",
-            "use(module$other.name);",
-            "module$testcode.name = module$other.name;"));
-  }
-
-  public void testExportFrom() {
-    testModules(
-        LINE_JOINER.join(
-            "export {name} from 'other';",
-            "export {default} from 'other';",
-            "export {class} from 'other';"),
-        LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "goog.require('module$other');",
-            "module$testcode.name = module$other.name;",
-            "module$testcode.default = module$other.default;",
-            "module$testcode.class = module$other.class;"));
-
-    testModules(
-        "export {a, b as c, d} from 'other';",
-        LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "goog.require('module$other');",
-            "module$testcode.a = module$other.a;",
-            "module$testcode.c = module$other.b;",
-            "module$testcode.d = module$other.d;"));
-
-    testModules(
-        "export {a as b, b as a} from 'other';",
-        LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "goog.require('module$other');",
-            "module$testcode.b = module$other.a;",
-            "module$testcode.a = module$other.b;"));
-
-    testModules(
-        LINE_JOINER.join(
-            "export {default as a} from 'other';",
-            "export {a as a2, default as b} from 'other';",
-            "export {class as switch} from 'other';"),
-        LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "goog.require('module$other');",
-            "module$testcode.a = module$other.default;",
-            "module$testcode.a2 = module$other.a;",
-            "module$testcode.b = module$other.default;",
-            "module$testcode.switch = module$other.class;"));
+            "var x$$module$testcode = 3, y$$module$testcode, z$$module$testcode = 2;"));
   }
 
   public void testExportDefault() {
-    testModules(
-        "export default 'someString';",
+    test(
         LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "var $jscompDefaultExport$$module$testcode = 'someString';",
-            "module$testcode.default = $jscompDefaultExport$$module$testcode;"));
-
-    testModules(
-        "var x = 5; export default x;",
+            "export default function f(){};",
+            "var x = f();"),
         LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "var x$$module$testcode = 5;",
-            "var $jscompDefaultExport$$module$testcode = x$$module$testcode;",
-            "module$testcode.default = $jscompDefaultExport$$module$testcode;"));
-
-    testModules(
-        "export default function f(){}; var x = f();",
-        LINE_JOINER.join(
-            "goog.provide('module$testcode');",
+            FILE_OVERVIEW,
             "function f$$module$testcode() {}",
-            "var x$$module$testcode = f$$module$testcode();",
-            "module$testcode.default = f$$module$testcode;"));
+            "var x$$module$testcode = f$$module$testcode();"));
 
-    testModules(
-        "export default class Foo {}; var x = new Foo;",
+    test(
         LINE_JOINER.join(
-            "goog.provide('module$testcode');",
+            "export default class Foo {};",
+            "var x = new Foo;"),
+        LINE_JOINER.join(
+            FILE_OVERVIEW,
             "class Foo$$module$testcode {}",
-            "var x$$module$testcode = new Foo$$module$testcode;",
-            "module$testcode.default = Foo$$module$testcode;"));
+            "var x$$module$testcode = new Foo$$module$testcode;"));
   }
 
   public void testExportDefault_anonymous() {
-    testModules(
+    test(
+        "export default 'someString';",
+        LINE_JOINER.join(
+            FILE_OVERVIEW,
+            "var $jscompDefaultExport$$module$testcode = 'someString';"));
+
+    test(
+        "var x = 5; export default x;",
+        LINE_JOINER.join(
+            FILE_OVERVIEW,
+            "var x$$module$testcode = 5;",
+            "var $jscompDefaultExport$$module$testcode = x$$module$testcode;"));
+
+    test(
         "export default class {};",
         LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "var $jscompDefaultExport$$module$testcode = class {};",
-            "module$testcode.default = $jscompDefaultExport$$module$testcode;"));
+            FILE_OVERVIEW,
+            "var $jscompDefaultExport$$module$testcode = class {};"));
 
-    testModules(
+    test(
         "export default function() {}",
         LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "var $jscompDefaultExport$$module$testcode = function() {}",
-            "module$testcode.default = $jscompDefaultExport$$module$testcode;"));
+            FILE_OVERVIEW,
+            "var $jscompDefaultExport$$module$testcode = function() {}"));
   }
 
-  public void testExtendImportedClass() {
-    testModules(
-        LINE_JOINER.join(
-            "import {Parent} from 'other';",
-            "class Child extends Parent {",
-            "  /** @param {Parent} parent */",
-            "  useParent(parent) {}",
-            "}"),
-        LINE_JOINER.join(
-            "goog.require('module$other');",
-            "class Child$$module$testcode extends module$other.Parent {",
-            "  /** @param {Parent$$module$other} parent */",
-            "  useParent(parent) {}",
-            "}"));
+  public void testExport_missing() {
+    testError(
+        "export {foo}",
+        Es6ModuleRewrite.EXPORTED_BINDING_NOT_DECLARED);
+    testError(
+        "var foo; export {bar as foo};",
+        Es6ModuleRewrite.EXPORTED_BINDING_NOT_DECLARED);
+  }
 
-    testModules(
-        LINE_JOINER.join(
-            "import {Parent} from 'other';",
-            "class Child extends Parent {",
-            "  /** @param {./other.Parent} parent */",
-            "  useParent(parent) {}",
-            "}"),
-        LINE_JOINER.join(
-            "goog.require('module$other');",
-            "class Child$$module$testcode extends module$other.Parent {",
-            "  /** @param {module$other.Parent} parent */",
-            "  useParent(parent) {}",
-            "}"));
+  public void testExportDuplicate() {
+    testError(
+        "var x, y; export {x as z, y as z};",
+        Es6ModuleRegistry.DUPLICATED_EXPORT_NAMES);
 
-    testModules(
-        LINE_JOINER.join(
-            "import {Parent} from 'other';",
-            "export class Child extends Parent {",
-            "  /** @param {Parent} parent */",
-            "  useParent(parent) {}",
-            "}"),
-        LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "goog.require('module$other');",
-            "class Child$$module$testcode extends module$other.Parent {",
-            "  /** @param {Parent$$module$other} parent */",
-            "  useParent(parent) {}",
-            "}",
-            "/** @const */ module$testcode.Child = Child$$module$testcode;"));
+    testError(
+        "var x, y; export {x as z}; export {y as z};",
+        Es6ModuleRegistry.DUPLICATED_EXPORT_NAMES);
+
+    testError(
+        "var x; export {x as default}; export default 1;",
+        Es6ModuleRegistry.DUPLICATED_EXPORT_NAMES);
+  }
+
+  public void testImport() {
+    SourceFile other =
+        source("other.js",
+            "export var name;",
+            "export default function use() {}");
+    SourceFile otherExpected =
+        source("other.js",
+            FILE_OVERVIEW,
+            "var name$$module$other;",
+            "function use$$module$other() {}");
+
+    test(
+        ImmutableList.of(
+            other,
+            source("main.js",
+                "import {name} from 'other';",
+                "use(name);")),
+        ImmutableList.of(
+            otherExpected,
+            source("main.js",
+                FILE_OVERVIEW,
+                "use(name$$module$other);")));
+
+    test(
+        ImmutableList.of(
+            other,
+            source("main.js",
+                "import use from 'other';",
+                "use(name);")),
+        ImmutableList.of(
+            otherExpected,
+            source("main.js",
+                FILE_OVERVIEW,
+                "use$$module$other(name);")));
+
+    test(
+        ImmutableList.of(
+            other,
+            source("main.js",
+                "import use, {name} from 'other';",
+                "use(name);")),
+        ImmutableList.of(
+            otherExpected,
+            source("main.js",
+                FILE_OVERVIEW,
+                "use$$module$other(name$$module$other);")));
+
+    test(
+        ImmutableList.of(
+            other,
+            source("main.js",
+                "import use, {name} from 'other';",
+                "use(name);")),
+        ImmutableList.of(
+            otherExpected,
+            source("main.js",
+                FILE_OVERVIEW,
+                "use$$module$other(name$$module$other);")));
+
+    test(
+        ImmutableList.of(
+            other,
+            source("main.js",
+                "import * as ns from 'other';",
+                "use(name);",
+                "ns.default(ns.name);")),
+        ImmutableList.of(
+            otherExpected,
+            source("main.js",
+                FILE_OVERVIEW,
+                "use(name);",
+                "use$$module$other(name$$module$other);")));
+  }
+
+  public void testImportDuplicate() {
+    SourceFile other = source("other.js", "export default 1; export var x");
+
+    test(
+        ImmutableList.of(
+            other,
+            source("main.js",
+                "import z from 'other';",
+                "import {x as z} from 'other';")),
+        null,
+        Es6ModuleRegistry.DUPLICATED_IMPORTED_BOUND_NAMES);
+
+    test(
+        ImmutableList.of(
+            other,
+            source("main.js",
+                "import {default as z} from 'other';",
+                "import {x as z} from 'other';")),
+        null,
+        Es6ModuleRegistry.DUPLICATED_IMPORTED_BOUND_NAMES);
+
+    test(
+        ImmutableList.of(
+            other,
+            source("main.js",
+                "import {x as z, default as z} from 'other';")),
+        null,
+        Es6ModuleRegistry.DUPLICATED_IMPORTED_BOUND_NAMES);
+
+    test(
+        ImmutableList.of(
+            other,
+            source("main.js",
+                "import z, {x as z} from 'other';")),
+        null,
+        Es6ModuleRegistry.DUPLICATED_IMPORTED_BOUND_NAMES);
+  }
+
+  public void testImportAndExport() {
+    test(
+        ImmutableList.of(
+            source("mod2.js",
+                "export var a;"),
+            source("mod1.js",
+                "import {a as b} from 'mod2';",
+                "use(b)",
+                "export {b as c};"),
+            source("main.js",
+                "import {c as d} from 'mod1';",
+                "use(d);")),
+        ImmutableList.of(
+            source("mod2.js",
+                FILE_OVERVIEW,
+                "var a$$module$mod2;"),
+            source("mod1.js",
+                FILE_OVERVIEW,
+                "use(a$$module$mod2);"),
+            source("main.js",
+                FILE_OVERVIEW,
+                "use(a$$module$mod2);")));
+
+    test(
+        ImmutableList.of(
+            source("mod2.js",
+                "export var a;"),
+            source("mod1.js",
+                "import {a as b} from 'mod2';",
+                "export {b as c};"),
+            source("main.js",
+                "import {c as d} from 'mod1';",
+                "use(d);")),
+        ImmutableList.of(
+            source("mod2.js",
+                FILE_OVERVIEW,
+                "var a$$module$mod2;"),
+            source("mod1.js",
+                ""),
+            source("main.js",
+                FILE_OVERVIEW,
+                "use(a$$module$mod2);")));
+  }
+
+  public void testIndirectExport() {
+    test(
+        ImmutableList.of(
+            source("mod2.js",
+                "export var a;"),
+            source("mod1.js",
+                "export {a as b} from 'mod2';"),
+            source("main.js",
+                "import {b as c} from 'mod1';",
+                "use(c);")),
+        ImmutableList.of(
+            source("mod2.js",
+                FILE_OVERVIEW,
+                "var a$$module$mod2;"),
+            source("mod1.js",
+                ""),
+            source("main.js",
+                FILE_OVERVIEW,
+                "use(a$$module$mod2);")));
+  }
+
+  public void testStarExport() {
+    test(
+        ImmutableList.of(
+            source("mod2.js",
+                "export var a;"),
+            source("mod1.js",
+                "export * from 'mod2';"),
+            source("main.js",
+                "import {a} from 'mod1';",
+                "use(a);")),
+        ImmutableList.of(
+            source("mod2.js",
+                FILE_OVERVIEW,
+                "var a$$module$mod2;"),
+            source("mod1.js",
+                ""),
+            source("main.js",
+                FILE_OVERVIEW,
+                "use(a$$module$mod2);")));
+  }
+
+  public void testIndirectExportNamespace() {
+    test(
+        ImmutableList.of(
+            source("mod2.js",
+                "export var a;"),
+            source("mod1.js",
+                "import * as mod2 from 'mod2';",
+                "export {mod2};"),
+            source("main.js",
+                "import {mod2} from 'mod1';",
+                "use(mod2.a);")),
+        ImmutableList.of(
+            source("mod2.js",
+                FILE_OVERVIEW,
+                "var a$$module$mod2;"),
+            source("mod1.js",
+                ""),
+            source("main.js",
+                FILE_OVERVIEW,
+                "use(a$$module$mod2);")));
+
+    test(
+        ImmutableList.of(
+            source("mod2.js",
+                "export var a;"),
+            source("mod1.js",
+                "import * as mod2 from 'mod2';",
+                "export {mod2}"),
+            source("main.js",
+                "import * as mod1 from 'mod1';",
+                "use(mod1.mod2.a);")),
+        ImmutableList.of(
+            source("mod2.js",
+                FILE_OVERVIEW,
+                "var a$$module$mod2;"),
+            source("mod1.js",
+                ""),
+            source("main.js",
+                FILE_OVERVIEW,
+                "use(a$$module$mod2);")));
   }
 
   public void testFixTypeNode() {
-    testModules(
-        LINE_JOINER.join(
-            "export class Child {", "  /** @param {Child} child */", "  useChild(child) {}", "}"),
-        LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "class Child$$module$testcode {",
-            "  /** @param {Child$$module$testcode} child */",
-            "  useChild(child) {}",
-            "}",
-            "/** @const */ module$testcode.Child = Child$$module$testcode;"));
+    test(
+        ImmutableList.of(
+            source("other.js",
+                "export default class {}",
+                "export class Foo {}",
+                "/** @typedef {number|!Object} */export var NumOrObj;"),
+            source("main.js",
+                "import Def, * as ns from 'other';",
+                "/**",
+                " * @param {Def} arg1",
+                " * @param {ns.Foo} arg2",
+                " * @param {ns.NumOrObj} arg3",
+                " */",
+                "function use(arg1, arg2, arg3) {}")),
+        ImmutableList.of(
+            source("other.js",
+                FILE_OVERVIEW,
+                "var $jscompDefaultExport$$module$other = class {}",
+                "class Foo$$module$other {}",
+                "/** @typedef {number|!Object} */var NumOrObj$$module$other;"),
+            source("main.js",
+                FILE_OVERVIEW,
+                "/**",
+                " * @param {$jscompDefaultExport$$module$other} arg1",
+                " * @param {Foo$$module$other} arg2",
+                " * @param {NumOrObj$$module$other} arg3",
+                " */",
+                " function use$$module$main(arg1, arg2, arg3) {}")));
 
-    testModules(
-        LINE_JOINER.join(
-            "export class Child {",
-            "  /** @param {Child.Foo.Bar.Baz} baz */",
-            "  useBaz(baz) {}",
-            "}"),
-        LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "class Child$$module$testcode {",
-            "  /** @param {Child$$module$testcode.Foo.Bar.Baz} baz */",
-            "  useBaz(baz) {}",
-            "}",
-            "/** @const */ module$testcode.Child = Child$$module$testcode;"));
+    test(
+        ImmutableList.of(
+            source("other.js",
+                "/** @const */ export var repo = {};",
+                "/** @const */ repo.Foo = class {}",
+                "/** @typedef {number|!Object} */repo.NumOrObj"),
+            source("main.js",
+                "import * as ns from 'other';",
+                "/**",
+                " * @param {ns.repo.Foo} arg1",
+                " * @param {ns.repo.NumOrObj} arg2",
+                " */",
+                "function use(arg1, arg2) {}")),
+        ImmutableList.of(
+            source("other.js",
+                FILE_OVERVIEW,
+                "/** @const */ var repo$$module$other = {};",
+                "/** @const */ repo$$module$other.Foo = class {}",
+                "/** @typedef {number|!Object} */repo$$module$other.NumOrObj"),
+            source("main.js",
+                FILE_OVERVIEW,
+                "/**",
+                " * @param {repo$$module$other.Foo} arg1",
+                " * @param {repo$$module$other.NumOrObj} arg2",
+                " */",
+                "function use$$module$main(arg1, arg2) {}")));
   }
 
-  public void testReferenceToTypeFromOtherModule() {
-    testModules(
-        LINE_JOINER.join(
-            "export class Foo {", "  /** @param {./other.Baz} baz */", "  useBaz(baz) {}", "}"),
-        LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "class Foo$$module$testcode {",
-            "  /** @param {module$other.Baz} baz */",
-            "  useBaz(baz) {}",
-            "}",
-            "/** @const */ module$testcode.Foo = Foo$$module$testcode;"));
+  public void preserveTypeCast() {
+    test(
+        ImmutableList.of(
+            source("other.js",
+                "/** @type {number|!Object} */",
+                "export var foo = 42"),
+            source("main.js",
+                "import * as ns from 'other';",
+                "use(/** @type {number} */(ns.foo), foo);")),
+        ImmutableList.of(
+            source("other.js",
+                FILE_OVERVIEW,
+                "/** @type {number|!Object} */",
+                "var foo$$module$other = 42"),
+            source("main.js",
+                FILE_OVERVIEW,
+                "use(/** @type {number} */(foo$$module$other), foo);")));
   }
 
-  public void testRenameTypedef() {
-    testModules(
-        LINE_JOINER.join(
-            "import 'other';", "/** @typedef {string|!Object} */", "export var UnionType;"),
-        LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "goog.require('module$other');",
-            "/** @typedef {string|!Object} */",
-            "var UnionType$$module$testcode;",
-            "/** @typedef {UnionType$$module$testcode} */",
-            "module$testcode.UnionType;"));
+  public void testExtendImportedClass() {
+    SourceFile parent = source("parent.js",
+        "export class Parent {}",
+        "export default class {}");
+    SourceFile parentExpected = source("parent.js",
+        FILE_OVERVIEW,
+        "class Parent$$module$parent {}",
+        "var $jscompDefaultExport$$module$parent = class {}");
+
+    test(
+        ImmutableList.of(
+            parent,
+            source("main.js",
+                "import {Parent} from 'parent';",
+                "class Child extends Parent {",
+                "  /** @param {Parent} parent */",
+                "  useParent(parent) {}",
+                "}")),
+        ImmutableList.of(
+            parentExpected,
+            source("main.js",
+                FILE_OVERVIEW,
+                "class Child$$module$main extends Parent$$module$parent {",
+                "  /** @param {Parent$$module$parent} parent */",
+                "  useParent(parent) {}",
+                "}")));
+
+    test(
+        ImmutableList.of(
+            parent,
+            source("main.js",
+                "import Parent from 'parent';",
+                "class Child extends Parent {",
+                "  /** @param {Parent} parent */",
+                "  useParent(parent) {}",
+                "}")),
+        ImmutableList.of(
+            parentExpected,
+            source("main.js",
+                FILE_OVERVIEW,
+                "class Child$$module$main extends $jscompDefaultExport$$module$parent {",
+                "  /** @param {$jscompDefaultExport$$module$parent} parent */",
+                "  useParent(parent) {}",
+                "}")));
+
+    test(
+        ImmutableList.of(
+            parent,
+            source("main.js",
+                "import Parent from 'parent';",
+                "class Child extends Parent {",
+                "  /** @param {./parent.Parent} parent */",
+                "  useParent(parent) {}",
+                "}")),
+        ImmutableList.of(
+            parentExpected,
+            source("main.js",
+                FILE_OVERVIEW,
+                "class Child$$module$main extends $jscompDefaultExport$$module$parent {",
+                "  /** @param {Parent$$module$parent} parent */",
+                "  useParent(parent) {}",
+                "}")));
+
+    test(
+        ImmutableList.of(
+            parent,
+            source("child.js",
+                "import {Parent} from 'parent';",
+                "export * from 'parent';",
+                "export class Child extends Parent {",
+                "  /** @param {Parent} parent */",
+                "  useParent(parent) {}",
+                "}"),
+            source("main.js",
+                "import {Child, Parent} from 'child';",
+                "var obj = new Child();",
+                "obj.useParent(new Parent())")),
+        ImmutableList.of(
+            parentExpected,
+            source("child.js",
+                FILE_OVERVIEW,
+                "class Child$$module$child extends Parent$$module$parent {",
+                "  /** @param {Parent$$module$parent} parent */",
+                "  useParent(parent) {}",
+                "}"),
+            source("main.js",
+                FILE_OVERVIEW,
+                "var obj$$module$main = new Child$$module$child();",
+                "obj$$module$main.useParent(new Parent$$module$parent)")));
   }
 
-  public void testRenameImportedReference() {
-    testModules(
+  public void testLoadError() {
+    testError(
+        "import name from 'module_does_not_exist'; use(name);",
+        ES6ModuleLoader.LOAD_ERROR);
+    testError(
+        "export {name} from 'module_does_not_exist';",
+        ES6ModuleLoader.LOAD_ERROR);
+    testError(
         LINE_JOINER.join(
-            "import {f} from 'other';",
-            "import {b as bar} from 'other';",
-            "f();",
-            "function g() {",
-            "  f();",
-            "  bar++;",
-            "  function h() {",
-            "    var f = 3;",
-            "    { let f = 4; }",
-            "  }",
-            "}"),
-        LINE_JOINER.join(
-            "goog.require('module$other');",
-            "module$other.f();",
-            "function g$$module$testcode() {",
-            "  module$other.f();",
-            "  module$other.b++;",
-            "  function h() {",
-            "    var f = 3;",
-            "    { let f = 4; }",
-            "  }",
-            "}"));
+          "export var name;",
+          "/** @param {./module/does/not/exists.Foo} arg */ function f(arg) {}"),
+        ES6ModuleLoader.LOAD_ERROR);
   }
 
-  public void testGoogRequires_noChange() {
-    testSame("goog.require('foo.bar');");
-    testSame("var bar = goog.require('foo.bar');");
+  public void testExportNameNotDeclared() {
+    testError(
+        "export {name}",
+        Es6ModuleRewrite.EXPORTED_BINDING_NOT_DECLARED);
+    testError(
+        "var name; export {foo as name};",
+        Es6ModuleRewrite.EXPORTED_BINDING_NOT_DECLARED);
+  }
 
-    testModules(
-        "goog.require('foo.bar'); export var x;",
-        LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "goog.require('foo.bar');",
-            "var x$$module$testcode;",
-            "module$testcode.x = x$$module$testcode"));
+  public void assignImportedName() {
+    SourceFile mod1 = source("mod1.js", "export var name = 12");
 
-    testModules(
-        "export var x; goog.require('foo.bar');",
-        LINE_JOINER.join(
-            "goog.provide('module$testcode');",
-            "var x$$module$testcode;",
-            "goog.require('foo.bar');",
-            "module$testcode.x = x$$module$testcode"));
+    test(
+        ImmutableList.of(
+          mod1,
+          source("main.js",
+            "import {name} from 'mod1';",
+            "name = 42;")),
+        null,
+        Es6ModuleRewrite.IMPORTED_BINDING_ASSIGNMENT);
 
-    testModules(
-        "import * as s from 'other'; goog.require('foo.bar');",
-        "goog.require('module$other'); goog.require('foo.bar');");
+    test(
+        ImmutableList.of(
+          mod1,
+          source("main.js",
+            "import {name} from 'mod1';",
+            "name++;")),
+        null,
+        Es6ModuleRewrite.IMPORTED_BINDING_ASSIGNMENT);
 
-    testModules(
-        "goog.require('foo.bar'); import * as s from 'other';",
-        "goog.require('module$other'); goog.require('foo.bar'); ");
+    test(
+        ImmutableList.of(
+          mod1,
+          source("main.js",
+            "import * as ns from 'mod1';",
+            "ns = 42;")),
+        null,
+        Es6ModuleRewrite.IMPORTED_BINDING_ASSIGNMENT);
+
+    test(
+        ImmutableList.of(
+          mod1,
+          source("main.js",
+            "import * as ns from 'mod1';",
+            "ns.name = 42;")),
+        null,
+        Es6ModuleRewrite.IMPORTED_BINDING_ASSIGNMENT);
+
+    test(
+        ImmutableList.of(
+          mod1,
+          source("main.js",
+            "import * as ns from 'mod1';",
+            "ns.newName = 42;")),
+        null,
+        Es6ModuleRewrite.IMPORTED_BINDING_ASSIGNMENT);
+
+    test(
+        ImmutableList.of(
+          mod1,
+          source("mod2.js",
+              "import * as ns1 from 'mod1';",
+              "export {ns1};"),
+          source("main.js",
+              "import * as ns2 from 'mod2';",
+              "ns2.ns1 = 42")),
+        null,
+        Es6ModuleRewrite.IMPORTED_BINDING_ASSIGNMENT);
+  }
+
+  public void testAssignImportedObject() {
+    test(
+        ImmutableList.of(
+          source("mod1.js",
+              "export var obj = { foo: 12 };"),
+          source("main.js",
+              "import {obj} from 'mod1';",
+              "obj.foo = 42;",
+              "obj.newName = 24")),
+        ImmutableList.of(
+          source("mod1.js",
+              FILE_OVERVIEW,
+              "var obj$$module$mod1 = { foo: 12 };"),
+          source("main.js",
+              FILE_OVERVIEW,
+              "obj$$module$mod1.foo = 42;",
+              "obj$$module$mod1.newName = 24;")));
+  }
+
+  public void useNamespaceNonGetProp() {
+    SourceFile mod1 = source("mod1.js",
+        "export var name");
+
+    test(
+        ImmutableList.of(
+          mod1,
+          source("main.js",
+            "import * as ns from 'mod1';",
+            "use(ns)")),
+        null,
+        Es6ModuleRewrite.MODULE_NAMESPACE_NON_GETPROP);
+
+    SourceFile mod2 = source("mod2.js",
+        "import * as ns1 from 'mod1';",
+        "export {ns1};");
+
+    test(
+        ImmutableList.of(
+          mod1,
+          mod2,
+          source("main.js",
+              "import * as ns2 from 'mod2'",
+              "use(ns2.ns1)")),
+        null,
+        Es6ModuleRewrite.MODULE_NAMESPACE_NON_GETPROP);
   }
 
   public void testGoogRequires_rewrite() {
-    testModules(
+    test(
         "const bar = goog.require('foo.bar'); export var x;",
         LINE_JOINER.join(
-            "goog.provide('module$testcode');",
+            FILE_OVERVIEW,
             "goog.require('foo.bar');",
             "const bar$$module$testcode = foo.bar;",
-            "var x$$module$testcode;",
-            "module$testcode.x = x$$module$testcode"));
+            "var x$$module$testcode;"));
 
-    testModules(
+    test(
         "export var x; const bar = goog.require('foo.bar');",
         LINE_JOINER.join(
-            "goog.provide('module$testcode');",
+            FILE_OVERVIEW,
             "var x$$module$testcode;",
             "goog.require('foo.bar');",
-            "const bar$$module$testcode = foo.bar;",
-            "module$testcode.x = x$$module$testcode"));
-
-    testModules(
-        "import * as s from 'other'; const bar = goog.require('foo.bar');",
-        LINE_JOINER.join(
-            "goog.require('module$other');",
-            "goog.require('foo.bar');",
             "const bar$$module$testcode = foo.bar;"));
 
-    testModules(
-        "const bar = goog.require('foo.bar'); import * as s from 'other';",
-        LINE_JOINER.join(
-            "goog.require('module$other');",
+    test(
+        ImmutableList.of(
+          source("other.js"),
+          source("main.js",
+            "import * as s from 'other'; const bar = goog.require('foo.bar');")),
+        ImmutableList.of(
+          source("other.js"),
+          source("main.js",
+            FILE_OVERVIEW,
             "goog.require('foo.bar');",
-            "const bar$$module$testcode = foo.bar;"));
+            "const bar$$module$main = foo.bar;")));
+
+    test(
+        ImmutableList.of(
+          source("other.js"),
+          source("main.js",
+            "const bar = goog.require('foo.bar'); import * as s from 'other';")),
+        ImmutableList.of(
+          source("other.js"),
+          source("main.js",
+            FILE_OVERVIEW,
+            "goog.require('foo.bar');",
+            "const bar$$module$main = foo.bar;")));
   }
 
   public void testGoogRequires_nonConst() {
-    testModules(
+    testError(
         "var bar = goog.require('foo.bar'); export var x;",
         LHS_OF_GOOG_REQUIRE_MUST_BE_CONST);
 
-    testModules(
+    testError(
         "export var x; var bar = goog.require('foo.bar');",
         LHS_OF_GOOG_REQUIRE_MUST_BE_CONST);
 
-    testModules(
-        "import * as s from 'other'; var bar = goog.require('foo.bar');",
+    test(
+        ImmutableList.of(
+          source("other.js"),
+          source("main.js",
+            "import * as s from 'other'; var bar = goog.require('foo.bar');")),
+        null,
         LHS_OF_GOOG_REQUIRE_MUST_BE_CONST);
 
-    testModules(
-        "var bar = goog.require('foo.bar'); import * as s from 'other';",
+    test(
+        ImmutableList.of(
+          source("other.js"),
+          source("main.js",
+            "var bar = goog.require('foo.bar'); import * as s from 'other';")),
+        null,
         LHS_OF_GOOG_REQUIRE_MUST_BE_CONST);
   }
 
@@ -556,8 +879,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "const {foo, bar} = goog.require('some.name.space');",
             "use(foo, bar);"),
         LINE_JOINER.join(
-            "goog.require('module$other');",
-            "goog.require('some.name.space');",
+            "goog.require('some.name.space')",
             "const {",
             "  foo: foo$$module$testcode,",
             "  bar: bar$$module$testcode,",
