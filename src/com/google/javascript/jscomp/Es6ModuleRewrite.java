@@ -87,6 +87,11 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
     Preconditions.checkArgument(root.isScript() &&
         compiler.getInput(root.getInputId()) == module.getInput());
 
+    // Do nothing if empty.
+    if(root.getChildCount() == 0) {
+      return;
+    }
+
     // Need to rewriteRequires before renaming variables.
     rewriteRequires(root);
 
