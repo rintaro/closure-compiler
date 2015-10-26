@@ -243,6 +243,11 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
         return;
       }
       rewriteImportedBinding(t, n, parent, binding);
+
+      // Call on module namespace object properties can be considered as FREE_CALL.
+      if(parent.isCall()) {
+        parent.putBooleanProp(Node.FREE_CALL, true);
+      }
     }
   }
 

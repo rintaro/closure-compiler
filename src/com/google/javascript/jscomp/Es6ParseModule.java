@@ -225,9 +225,8 @@ public final class Es6ParseModule extends AbstractShallowCallback {
         if (declaration.isClass() && i > 0) {
           break;
         }
-        Var v = t.getScope().getVar(localName.getString());
 
-        // If `v` is already declared, it would be an error
+        // If `localName` is already declared, it would be an error
         // caught in VariableReferenceCheck.
 
         localName = localName.cloneNode();
