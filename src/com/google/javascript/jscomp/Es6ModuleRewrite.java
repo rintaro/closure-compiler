@@ -19,6 +19,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.Es6Module.ImportEntry;
 import com.google.javascript.jscomp.Es6Module.ExportEntry;
@@ -27,6 +28,7 @@ import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.IR;
+import com.google.javascript.rhino.TypeI;
 
 import java.util.List;
 import java.util.Set;
@@ -182,7 +184,7 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
 
         Preconditions.checkState(binding != null);
 
-        rewriteImportedBinding(t, n, parent, binding);
+        rewriteImportedBinding(t, n, parent, binding, null);
       }
     }
   }
@@ -239,20 +241,26 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
             moduleRegistry.getModuleName(ns.getModule()), propertyName);
         return;
       }
-      rewriteImportedBinding(t, n, parent, binding);
+
+      String origName = (String) target.getProp(Node.ORIGINALNAME_PROP);
+      if(origName == null) {
+        origName = target.getString();
+      }
+      rewriteImportedBinding(t, n, parent, binding, origName + "." + propertyName);
 
       // Call on module namespace object properties can be considered as FREE_CALL.
       if(parent.isCall()) {
         parent.putBooleanProp(Node.FREE_CALL, true);
       }
+
     }
   }
 
   /**
    * Replace resolved bindings with its orignal bindings.
    */
-  private void rewriteImportedBinding(
-      NodeTraversal t, Node n, Node parent, ModuleNamePair binding) {
+  private void rewriteImportedBinding(NodeTraversal t, Node n, Node parent,
+      ModuleNamePair binding, String originalName) {
 
     String newName;
     if(binding.name == null) {
@@ -270,7 +278,12 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
       newName = toGlobalName(binding);
     }
 
-    parent.replaceChild(n, IR.name(newName).srcref(n));
+    Node ref = NodeUtil.newName(compiler, newName, n);
+    if (originalName != null) {
+      ref.putProp(Node.ORIGINALNAME_PROP, originalName);
+    }
+
+    parent.replaceChild(n, ref);
   }
 
   /**
@@ -298,19 +311,16 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
     }
 
     String name = n.getString();
-    String newName = null;
 
+    String newName = null;
     Es6Module.Namespace namespace = null;
-    String rest = "";
+
+    List<String> rest = ImmutableList.of();
 
     if(ES6ModuleLoader.isRelativeIdentifier(name)) {
       //   @type {./foo/bar.baz/qux.quux.Foo}
       int lastSlash = name.lastIndexOf('/');
       int endIndex = name.indexOf('.', lastSlash);
-      if(endIndex == -1) {
-        t.report(n, MODULE_NAMESPACE_NON_GETPROP);
-        return;
-      }
 
       String required = name.substring(0, endIndex);
       Es6Module mod = moduleRegistry.resolveImportedModule(module, required);
@@ -321,13 +331,13 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
         return;
       }
       namespace = mod.getNamespace();
-      rest = name.substring(endIndex + 1);
-    } else {
-      List<String> splitted = Splitter.on('.').limit(2).splitToList(name);
-      String baseName = splitted.get(0);
-      if(splitted.size() == 2) {
-        rest = splitted.get(1);
+      if(endIndex >= 0) {
+        rest = Splitter.on('.').splitToList(name.substring(endIndex + 1));
       }
+    } else {
+      List<String> splitted = Splitter.on('.').splitToList(name);
+      String baseName = splitted.get(0);
+      rest = splitted.subList(1, splitted.size());
 
       Var var = t.getScope().getVar(baseName);
       if (var != null && var.isGlobal()) {
@@ -356,8 +366,7 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
 
     // Resolve and collapse imported module namespace object property path.
     if (namespace != null) {
-      Iterator<String> path = Splitter.on('.').split(rest).iterator();
-
+      Iterator<String> path = rest.iterator();
       while (namespace != null) {
         if (!path.hasNext()) {
           t.report(n, MODULE_NAMESPACE_NON_GETPROP);
@@ -373,16 +382,16 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
         if(binding.name == null) {
           namespace = binding.module.getNamespace();
         } else {
-          newName = toGlobalName(binding);
-          rest = Joiner.on(".").join(path);
           namespace = null;
+          newName = toGlobalName(binding);
+          rest = ImmutableList.copyOf(path);
         }
       }
     }
 
     Preconditions.checkState(newName != null);
     if(!rest.isEmpty()) {
-      newName += "." + rest;
+      newName += "." + Joiner.on('.').join(rest);
     }
     n.setString(newName);
     n.putProp(Node.ORIGINALNAME_PROP, name);
