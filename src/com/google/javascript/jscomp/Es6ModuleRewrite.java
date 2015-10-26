@@ -21,6 +21,7 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableSet;
 import com.google.javascript.jscomp.NodeTraversal.AbstractPostOrderCallback;
 import com.google.javascript.jscomp.Es6Module.ImportEntry;
+import com.google.javascript.jscomp.Es6Module.ExportEntry;
 import com.google.javascript.jscomp.Es6Module.ModuleNamePair;
 import com.google.javascript.rhino.Node;
 import com.google.javascript.rhino.JSDocInfo;
@@ -36,6 +37,10 @@ import java.util.Iterator;
  * rewrites imported variables into it's original name.
  */
 public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
+
+  static final DiagnosticType EXPORTED_BINDING_NOT_DECLARED  = DiagnosticType.error(
+      "JSC_ES6_EXPORTED_BINDING_NOT_DECLARED",
+      "Exporting local name \"{0}\" is not declared.");
 
   static final DiagnosticType MODULE_NAMESPACE_ASSIGNMENT =
       DiagnosticType.error(
@@ -87,18 +92,10 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
     Preconditions.checkArgument(root.isScript() &&
         compiler.getInput(root.getInputId()) == module.getInput());
 
-    // Do nothing if empty.
-    if(root.getChildCount() == 0) {
-      return;
-    }
-
     // Need to rewriteRequires before renaming variables.
     rewriteRequires(root);
 
     NodeTraversal.traverseEs6(compiler, root, this);
-    // We unconditionally call reportCodeChange() because
-    // the tree is always modified in visitScript().
-    compiler.reportCodeChange();
   }
 
   @Override
@@ -395,6 +392,22 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
    * Misc SCRIPT root processings.
    */
   private void visitScript(NodeTraversal t, Node n) {
+
+    // Check the existence of all local export names.
+    for(ExportEntry ee : module.getLocalExportEntries()) {
+      String localName = ee.getLocalName();
+      if (t.getScope().getVar(localName) == null) {
+        // Error if any element of the ExportedBinding of this
+        // ExportSpecifier is not declared.
+        t.report(ee.getLocalNameNode(), EXPORTED_BINDING_NOT_DECLARED, localName);
+      }
+    }
+
+    // Do nothing if empty.
+    if(n.getChildCount() == 0) {
+      return;
+    }
+
     checkStrictModeDirective(t, n);
 
     JSDocInfoBuilder jsDocInfo = n.getJSDocInfo() == null
@@ -406,6 +419,8 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
     // Don't check provides and requires, since most of them are auto-generated.
     jsDocInfo.recordSuppressions(ImmutableSet.of("missingProvide", "missingRequire"));
     n.setJSDocInfo(jsDocInfo.build());
+
+    compiler.reportCodeChange();
   }
 
   private static void checkStrictModeDirective(NodeTraversal t, Node n) {

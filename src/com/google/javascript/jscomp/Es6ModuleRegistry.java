@@ -158,11 +158,14 @@ class Es6ModuleRegistry {
         nonModules.remove(moduleName);
       }
 
-      // ensure all required module are resolvable.
+      Set<String> failedModules = new HashSet<>();
+
+      // Ensure all required module are resolvable.
       for (Node required : requestedModules) {
         Es6Module requiredModule = resolveImportedModule(module, required.getString());
         if (requiredModule == null) {
           compiler.report(JSError.make(required, ES6ModuleLoader.LOAD_ERROR, required.getString()));
+          failedModules.add(required.getString());
           continue;
         }
         String requiredModuleName = getModuleName(requiredModule);
@@ -171,20 +174,16 @@ class Es6ModuleRegistry {
         nonModules.remove(requiredModuleName);
         module.getInput().addRequire(requiredModuleName);
       }
-    }
-
-    // Here, `nonModules` is a set of "modules" they don't export anything,
-    // don't import anything, and not imported from other modules.
-    // We treat them as non modules (i.e. Scripts).
-    moduleMap.keySet().removeAll(nonModules);
-
-    for (String moduleName : moduleMap.keySet()) {
-      // This is a ES6 module.
-      Es6Module module = moduleMap.get(moduleName);
-      module.getInput().addProvide(moduleName);
 
       // Ensure all named exports from module are resolvable.
       for (ExportEntry e : module.getIndirectExportEntries()) {
+
+        // skip is this entry has failed module request.
+        String required = e.getModuleRequest();
+        if(required != null && failedModules.contains(required)) {
+          continue;
+        }
+
         if (e.getExportName() != null && module.resolveExport(e.getExportName()) == null) {
           compiler.report(JSError.make(e.getExportNameNode(), RESOLVE_EXPORT_FAILURE,
                 moduleName, e.getExportName()));
@@ -193,17 +192,36 @@ class Es6ModuleRegistry {
 
       // Ensure all imported bindings are resolvable.
       for (ImportEntry in : module.getImportEntries()) {
-        String importName = in.getImportName();
-        if (importName == null) {
-          // ignore namespace import here.
+
+        // skip this entry has failed module request.
+        if (failedModules.contains(in.getModuleRequest())) {
           continue;
         }
+
+        // ignore namespace import here.
+        String importName = in.getImportName();
+        if (importName == null) {
+          continue;
+        }
+
         Es6Module requiredModule = resolveImportedModule(module, in.getModuleRequest());
         if (requiredModule != null && requiredModule.resolveExport(importName) == null) {
           compiler.report(JSError.make(in.getImportNameNode(), RESOLVE_EXPORT_FAILURE,
                 getModuleName(requiredModule), importName));
         }
       }
+    }
+
+    // Here, `nonModules` is a set of "modules" they don't export anything,
+    // don't import anything, and not imported from other modules.
+    // We treat them as non modules (i.e. Scripts).
+    moduleMap.keySet().removeAll(nonModules);
+
+    // Declare provide on all modules.
+    for (String moduleName : moduleMap.keySet()) {
+      // This is a ES6 module.
+      Es6Module module = moduleMap.get(moduleName);
+      module.getInput().addProvide(moduleName);
     }
   }
 

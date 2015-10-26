@@ -39,14 +39,6 @@ import java.util.LinkedHashSet;
  */
 public final class Es6ParseModule extends AbstractShallowCallback {
 
-  static final DiagnosticType EXPORTED_BINDING_NOT_DECLARED  = DiagnosticType.error(
-      "JSC_ES6_EXPORTED_BINDING_NOT_DECLARED",
-      "Exporting local name \"{0}\" is not declared.");
-
-  static final DiagnosticType EXPORTED_NAME_DUPLICATED = DiagnosticType.error(
-      "JSC_ES6_EXPORTED_NAME_DUPLICATED",
-      "Redeclared export name: {0}");
-
   private static final String DEFAULT_VAR_NAME = "$jscompDefaultExport";
   private static final String DEFAULT_EXPORT_NAME = "default";
   private final AbstractCompiler compiler;
@@ -179,7 +171,7 @@ public final class Es6ParseModule extends AbstractShallowCallback {
         decl.useSourceInfoIfMissingFromForTree(export);
       }
       parent.addChildBefore(decl, export);
-      addExportEntry(IR.name(DEFAULT_EXPORT_NAME).srcref(export), null, name);
+      addExportEntry(IR.name(DEFAULT_EXPORT_NAME).srcref(export), null, name.cloneNode());
     } else if (export.getBooleanProp(Node.EXPORT_ALL_FROM)) {
       //   export * from 'moduleIdentifier';
       Node moduleRequest = export.getLastChild();
@@ -198,14 +190,10 @@ public final class Es6ParseModule extends AbstractShallowCallback {
             ? exportSpec.getLastChild()
             : origName;
 
-        if (moduleRequest == null) {
-          Var v = scope.getVar(origName.getString());
-          if (v == null || !v.isGlobal()) {
-            // Error if any element of the ExportedBinding of this
-            // ExportSpecifier is not declared.
-            t.report(origName, EXPORTED_BINDING_NOT_DECLARED, origName.getString());
-          }
-        }
+        // Note: The existence of localName declaration will be checked later
+        // in Es6ModuleRewrite#visitScript. We cannot check that here because
+        // the `origName` may be a imported name.
+ 
         addExportEntry(exportName, moduleRequest, origName);
       }
       if(moduleRequest != null) {
