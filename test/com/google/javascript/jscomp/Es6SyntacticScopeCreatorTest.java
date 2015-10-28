@@ -510,4 +510,88 @@ public final class Es6SyntacticScopeCreatorTest extends TestCase {
     Scope catchScope = scopeCreator.createScope(catchBlock, tryScope);
     assertTrue(catchScope.isDeclared("e", false));
   }
+
+  public void testImport() {
+    Scope scope = getScope("import n, {a, b as c} from 'other'");
+    assertTrue(scope.isDeclared("n", false));
+    assertTrue(scope.isDeclared("a", false));
+    assertFalse(scope.isDeclared("b", false));
+    assertTrue(scope.isDeclared("c", false));
+  }
+
+  public void testImportStar() {
+    Scope scope = getScope("import * as ns from 'other'");
+    assertTrue(scope.isDeclared("ns", false));
+  }
+
+  public void testExportDefaultClass() {
+    Scope scope = getScope("export default class Foo {}");
+    assertTrue(scope.isDeclared("Foo", false));
+    assertTrue(scope.isDeclared(Es6SyntacticScopeCreator.DEFAULT_BIND_NAME, false));
+  }
+
+  public void testExportDefaultClass_anonymous() {
+    Scope scope = getScope("export default class {}");
+    assertTrue(scope.isDeclared(Es6SyntacticScopeCreator.DEFAULT_BIND_NAME, false));
+  }
+
+  public void testExportDefaultFunction() {
+    Scope scope = getScope("export default function foo() {}");
+    assertTrue(scope.isDeclared("foo", false));
+    assertTrue(scope.isDeclared(Es6SyntacticScopeCreator.DEFAULT_BIND_NAME, false));
+  }
+
+  public void testExportDefaultFunction_anonymous() {
+    Scope scope = getScope("export default function() {}");
+    assertTrue(scope.isDeclared(Es6SyntacticScopeCreator.DEFAULT_BIND_NAME, false));
+  }
+
+  public void testExportDefaultExpression() {
+    Scope scope = getScope("export default foo = bar");
+    assertTrue(scope.isDeclared(Es6SyntacticScopeCreator.DEFAULT_BIND_NAME, false));
+    assertFalse(scope.isDeclared("foo", false));
+    assertFalse(scope.isDeclared("bar", false));
+  }
+
+  public void testExportVarStatement() {
+    Scope scope = getScope("export var x, y");
+    assertTrue(scope.isDeclared("x", false));
+    assertTrue(scope.isDeclared("y", false));
+    assertFalse(scope.isDeclared(Es6SyntacticScopeCreator.DEFAULT_BIND_NAME, false));
+  }
+
+  public void testExportClass() {
+    Scope scope = getScope("export class Foo {}");
+    assertTrue(scope.isDeclared("Foo", false));
+    assertFalse(scope.isDeclared(Es6SyntacticScopeCreator.DEFAULT_BIND_NAME, false));
+  }
+
+  public void testExportFunction() {
+    Scope scope = getScope("export function foo() {}");
+    assertTrue(scope.isDeclared("foo", false));
+    assertFalse(scope.isDeclared(Es6SyntacticScopeCreator.DEFAULT_BIND_NAME, false));
+  }
+
+  public void testExportDeclaration() {
+    Scope scope = getScope("export let x,y");
+    assertTrue(scope.isDeclared("x", false));
+    assertTrue(scope.isDeclared("y", false));
+    assertFalse(scope.isDeclared(Es6SyntacticScopeCreator.DEFAULT_BIND_NAME, false));
+  }
+
+  public void testExportClause() {
+    Scope scope = getScope("export {a, b as c}");
+    assertFalse(scope.isDeclared("a", false));
+    assertFalse(scope.isDeclared("b", false));
+    assertFalse(scope.isDeclared("c", false));
+    assertFalse(scope.isDeclared(Es6SyntacticScopeCreator.DEFAULT_BIND_NAME, false));
+  }
+
+  public void testExportClauseFrom() {
+    Scope scope = getScope("export {a, b as c} from 'other'");
+    assertFalse(scope.isDeclared("a", false));
+    assertFalse(scope.isDeclared("b", false));
+    assertFalse(scope.isDeclared("c", false));
+    assertFalse(scope.isDeclared(Es6SyntacticScopeCreator.DEFAULT_BIND_NAME, false));
+  }
 }

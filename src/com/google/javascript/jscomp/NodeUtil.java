@@ -2405,7 +2405,7 @@ public final class NodeUtil {
    * @return Whether n is a function used within an expression.
    */
   static boolean isFunctionExpression(Node n) {
-    return n.isFunction() && !isStatement(n);
+    return n.isFunction() && !isDeclarationParent(n.getParent());
   }
 
   /**
@@ -2415,7 +2415,7 @@ public final class NodeUtil {
    * @return Whether n is a class used within an expression.
    */
   static boolean isClassExpression(Node n) {
-    return n.isClass() && !isStatement(n);
+    return n.isClass() && !isDeclarationParent(n.getParent());
   }
 
   /**

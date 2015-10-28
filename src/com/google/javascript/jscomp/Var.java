@@ -197,6 +197,10 @@ public class Var implements StaticSlot, StaticRef {
     return declarationType() == Token.PARAM_LIST;
   }
 
+  boolean isImport() {
+    return declarationType() == Token.IMPORT;
+  }
+
   boolean isDefaultParam() {
     Node parent = nameNode.getParent();
     return parent.getParent().isParamList() && parent.isDefaultValue()
@@ -215,7 +219,8 @@ public class Var implements StaticSlot, StaticRef {
         Token.FUNCTION,
         Token.CLASS,
         Token.CATCH,
-        Token.PARAM_LIST);
+        Token.PARAM_LIST,
+        Token.IMPORT);
     for (Node current = nameNode; current != null;
          current = current.getParent()) {
       if (types.contains(current.getType())) {

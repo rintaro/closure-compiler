@@ -38,6 +38,10 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
   private InputId inputId;
   private final RedeclarationHandler redeclarationHandler;
 
+  // Synthetic name for anonymous default export values
+  // "*default*" in the specification.
+  public static final String DEFAULT_BIND_NAME = "$jscompDefaultExport";
+
   // The arguments variable is special, in that it's declared for every function,
   // but not explicitly declared.
   private static final String ARGUMENTS = "arguments";
@@ -168,6 +172,10 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
         if (NodeUtil.isFunctionExpression(n) || !isNodeAtCurrentLexicalScope(n)) {
           return;
         }
+        if (n.getParent().getBooleanProp(Node.EXPORT_DEFAULT)
+            && n.getFirstChild().isEmpty()) {
+          return;
+        }
 
         String fnName = n.getFirstChild().getString();
         if (fnName.isEmpty()) {
@@ -181,6 +189,11 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
         if (NodeUtil.isClassExpression(n) || !isNodeAtCurrentLexicalScope(n)) {
           return;
         }
+        if (n.getParent().getBooleanProp(Node.EXPORT_DEFAULT)
+            && n.getFirstChild().isEmpty()) {
+          return;
+        }
+
         String className = n.getFirstChild().getString();
         if (className.isEmpty()) {
           // This is invalid, but allow it so the checks can catch it.
@@ -204,6 +217,37 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
         // created for the BLOCK above the CATCH
         scanVars(block);
         return;  // only one child to scan
+
+      case Token.IMPORT:
+        Node defaultImport = n.getChildAtIndex(0);
+        if(!defaultImport.isEmpty()) {
+          // import name from ..
+          declareVar(defaultImport);
+        }
+        Node otherImport = n.getChildAtIndex(1);
+        if(!otherImport.isEmpty()) {
+          switch (otherImport.getType()) {
+            case Token.IMPORT_SPECS:
+              // import {a, b as c} from ..
+              for (Node importSpec : otherImport.children()) {
+                declareVar(importSpec.getLastChild());
+              }
+              break;
+            case Token.IMPORT_STAR:
+              // import * as s from ..
+              declareVar(otherImport);
+              break;
+          }
+        }
+        return;
+
+      case Token.EXPORT:
+        Node child = n.getFirstChild();
+        scanVars(child);
+        if (n.getBooleanProp(Node.EXPORT_DEFAULT)) {
+          declareVar(NodeUtil.newName(compiler, DEFAULT_BIND_NAME, n));
+        }
+        return;
 
       case Token.SCRIPT:
         inputId = n.getInputId();
@@ -234,7 +278,8 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
    * @param n The node corresponding to the variable name.
    */
   private void declareVar(Scope s, Node n) {
-    Preconditions.checkState(n.isName() || n.isRest() || n.isStringKey(),
+    Preconditions.checkState(
+        n.isName() || n.isRest() || n.isStringKey() || n.isImportStar(),
         "Invalid node for declareVar: %s", n);
 
     String name = n.getString();
@@ -263,9 +308,9 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
   private boolean isNodeAtCurrentLexicalScope(Node n) {
     Node parent = n.getParent();
     Preconditions.checkState(parent.isBlock() || parent.isFor()
-        || parent.isForOf() || parent.isScript() || parent.isLabel());
+        || parent.isForOf() || parent.isScript() || parent.isLabel() || parent.isExport());
 
-    if (parent == scope.getRootNode() || parent.isScript()
+    if (parent == scope.getRootNode() || parent.isScript() || parent.isExport()
         || (parent.getParent().isCatch()
             && parent.getParent().getParent() == scope.getRootNode())) {
       return true;

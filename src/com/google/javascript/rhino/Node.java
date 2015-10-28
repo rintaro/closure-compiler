@@ -2700,6 +2700,10 @@ public class Node implements Serializable {
     return this.getType() == Token.IMPORT;
   }
 
+  public boolean isImportStar() {
+    return this.getType() == Token.IMPORT_STAR;
+  }
+
   public boolean isIn() {
     return this.getType() == Token.IN;
   }
