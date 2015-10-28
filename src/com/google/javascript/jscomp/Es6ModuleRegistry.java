@@ -39,9 +39,6 @@ import java.util.LinkedHashMap;
  */
 class Es6ModuleRegistry {
 
-  static final DiagnosticType DUPLICATED_IMPORTED_BOUND_NAMES = DiagnosticType.error(
-      "JSC_ES6_DUPLICATED_IMPORTED_BOUND_NAMES",
-      "Duplicated imported bound name: {0}");
 
   static final DiagnosticType DUPLICATED_EXPORT_NAMES = DiagnosticType.error(
       "JSC_ES6_DUPLICATED_EXPORT_NAMES",
@@ -80,13 +77,7 @@ class Es6ModuleRegistry {
     List<ExportEntry> starExportEntries = new ArrayList<>();
 
     for (ImportEntry ie : importEntries) {
-      // Error if the BoundNames of ImportDeclaration
-      // contains any duplicate entries
-      // http://www.ecma-international.org/ecma-262/6.0/#sec-imports-static-semantics-early-errors
-      if (importEntryMap.put(ie.getLocalName(), ie) != null) {
-        compiler.report(JSError.make(ie.getLocalNameNode(),
-              DUPLICATED_IMPORTED_BOUND_NAMES, ie.getLocalName()));
-      }
+      importEntryMap.put(ie.getLocalName(), ie);
     }
 
     for (ExportEntry ee : exportEntries) {
@@ -135,6 +126,7 @@ class Es6ModuleRegistry {
       }
     }
 
+    loader.addInput(input);
     moduleMap.put(moduleName,
         new Es6Module(this, input, requestedModules, importEntryMap,
             localExportEntries, indirectExportEntries, starExportEntries));
@@ -254,6 +246,14 @@ class Es6ModuleRegistry {
     return moduleMap.get(moduleName);
   }
 
+  public Es6Module getModule(CompilerInput input) {
+    URI loadAddress = loader.normalizeInputAddress(input);
+    if(loadAddress == null) {
+      return null;
+    }
+    String moduleName = ES6ModuleLoader.toModuleName(loadAddress);
+    return moduleMap.get(moduleName);
+  }
 
   /**
    * Substitute implementation of GetModuleNamespace( module )

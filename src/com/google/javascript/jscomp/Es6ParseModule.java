@@ -31,15 +31,20 @@ import java.util.LinkedList;
 import java.util.LinkedHashSet;
 
 /**
- * Collect ES6 ExportEntry and ImportEntry from module source file tree.
- * Also rewrites ExportDeclaration into normal declarations, and remove
- * ImportDeclaration from the tree.
+ * Parse ES6 module related ModuleItems from module source file tree and collect dependency
+ * information.
+ *
+ * Note: This process never rewrites anything.
  *
  * @see "http://www.ecma-international.org/ecma-262/6.0/index.html#sec-source-text-module-records"
  */
 public final class Es6ParseModule extends AbstractShallowCallback {
 
-  private static final String DEFAULT_VAR_NAME = "$jscompDefaultExport";
+  static final DiagnosticType DUPLICATED_IMPORTED_BOUND_NAMES = DiagnosticType.error(
+      "JSC_ES6_DUPLICATED_IMPORTED_BOUND_NAMES",
+      "Duplicated imported bound name: {0}");
+
+  private static final String DEFAULT_BIND_NAME = Es6SyntacticScopeCreator.DEFAULT_BIND_NAME;
   private static final String DEFAULT_EXPORT_NAME = "default";
   private final AbstractCompiler compiler;
 
@@ -88,7 +93,7 @@ public final class Es6ParseModule extends AbstractShallowCallback {
   }
 
   /**
-   * Collect ImportEntry and remove ImportDeclaration from the tree.
+   * Collect ImportEntry. And check the duplicated local names.
    */
   private void visitImport(NodeTraversal t, Node importDecl, Node parent) {
 
@@ -100,8 +105,9 @@ public final class Es6ParseModule extends AbstractShallowCallback {
 
     if (!defaultImport.isEmpty()) {
       // import foo from "mod"
+      checkImportedName(t, defaultImport);
       addImportEntry(moduleRequest, IR.name(DEFAULT_EXPORT_NAME).srcref(importDecl),
-          defaultImport);
+          defaultImport.cloneNode());
     }
 
     if (!otherImport.isEmpty()) {
@@ -113,65 +119,52 @@ public final class Es6ParseModule extends AbstractShallowCallback {
             Node localName = grandChild.getChildCount() == 2
                 ? grandChild.getLastChild()
                 : importName;
-            addImportEntry(moduleRequest, importName, localName);
+            checkImportedName(t, localName);
+            addImportEntry(moduleRequest, importName.cloneNode(), localName.cloneNode());
           }
           break;
         case Token.IMPORT_STAR:
           // import * as foo from "mod"
-          addImportEntry(moduleRequest, null, otherImport);
+          checkImportedName(t, otherImport);
+          addImportEntry(moduleRequest, null, otherImport.cloneNode());
           break;
         default:
           // TODO: Should we report unexpected token?
           break;
       }
     }
+  }
 
-    parent.removeChild(importDecl);
-    compiler.reportCodeChange();
+  private void checkImportedName(NodeTraversal t, Node nameNode) {
+    Var var = t.getScope().getVar(nameNode.getString());
+    // Must be declared in Es6SytaticScopeCreator.
+    Preconditions.checkState(var != null);
+    if (var.getNameNode() != nameNode) {
+      t.report(nameNode, DUPLICATED_IMPORTED_BOUND_NAMES, nameNode.getString());
+    }
   }
 
   /**
-   * Collect ExportEntry and rewrites ExportDeclaration into normal declarations.
+   * Collect ExportEntry. And check the existence of exporting variable.
    */
   private void visitExport(NodeTraversal t, Node export, Node parent) {
     if (export.getBooleanProp(Node.EXPORT_DEFAULT)) {
       // export default
-
-      // If the thing being exported is a class or function that has a name,
-      // extract it from the export statement, so that it can be referenced
-      // from within the module.
-      //
-      //   export default class X {} -> class X {};
-      //   export default function X() {} -> function X() {};
-      //
-      // Otherwise, create a local variable for it and export that.
-      //
-      //   export default 'someExpression'
-      //     ->
-      //   var $jscompDefaultExport = 'someExpression';
- 
       Node child = export.getFirstChild();
-      Node name = null;
+      Node localName = null;
 
-      if (child.isFunction()) {
-        name = NodeUtil.getFunctionNameNode(child);
-      } else if (child.isClass()) {
-        name = NodeUtil.getClassNameNode(child);
+      if (child.isFunction() || child.isClass()) {
+        //  export default function functionName() {}
+        //  export default class ClassName {}
+        localName = child.getFirstChild().cloneNode();
       }
-
-      Node decl = null;
-      if (name != null) {
-        //   export default class ClassName { }
-        decl = child.cloneTree();
-        decl.setJSDocInfo(export.getJSDocInfo());
-      } else {
-        //   export default class { }
-        name = IR.name(DEFAULT_VAR_NAME).srcref(export);
-        decl = IR.var(name , export.removeFirstChild());
-        decl.useSourceInfoIfMissingFromForTree(export);
+      if (localName == null || localName.isEmpty()) {
+        //  export default function() {}
+        //  export default class {}
+        //  export default AssingnmentExpression
+        localName = IR.name(DEFAULT_BIND_NAME).srcref(export);
       }
-      parent.addChildBefore(decl, export);
-      addExportEntry(IR.name(DEFAULT_EXPORT_NAME).srcref(export), null, name.cloneNode());
+      addExportEntry(IR.name(DEFAULT_EXPORT_NAME).srcref(export), null, localName);
     } else if (export.getBooleanProp(Node.EXPORT_ALL_FROM)) {
       //   export * from 'moduleIdentifier';
       Node moduleRequest = export.getLastChild();
@@ -183,56 +176,34 @@ public final class Es6ParseModule extends AbstractShallowCallback {
       Node moduleRequest = export.getChildCount() == 2
           ? export.getLastChild()
           : null;
-      Scope scope = t.getScope();
       for (Node exportSpec : export.getFirstChild().children()) {
-        Node origName = exportSpec.getFirstChild();
+        Node localName = exportSpec.getFirstChild().cloneNode();
         Node exportName = exportSpec.getChildCount() == 2
-            ? exportSpec.getLastChild()
-            : origName;
-
-        // Note: The existence of localName declaration will be checked later
-        // in Es6ModuleRewrite#visitScript. We cannot check that here because
-        // the `origName` may be a imported name.
- 
-        addExportEntry(exportName, moduleRequest, origName);
+            ? exportSpec.getLastChild().cloneNode()
+            : localName;
+        addExportEntry(exportName, moduleRequest, localName);
       }
       if(moduleRequest != null) {
         moduleRequests.add(moduleRequest);
       }
     } else {
-      //   export var Foo, Bar, Baz;
-      //   export function foo() {}
-      // etc.
-      Node declaration = export.getFirstChild();
-      for (int i = 0; i < declaration.getChildCount(); i++) {
-        Node localName = declaration.getChildAtIndex(i);
-        if (!localName.isName()) {
-          break;
-        }
-        // Break out on "B" in "class A extends B"
-        if (declaration.isClass() && i > 0) {
-          break;
-        }
-
-        // If `localName` is already declared, it would be an error
-        // caught in VariableReferenceCheck.
-
-        localName = localName.cloneNode();
-        // Clone because this name may be rewritten by setString()
-        // in Es6ModuleRewrite.
+      Node child = export.getFirstChild();
+      if (child.isFunction() || child.isClass()) {
+        //   export function foo() {}
+        //   export class Foo {}
+        Node localName = child.getFirstChild().cloneNode();
         addExportEntry(localName, null, localName);
+      } else {
+        //    export var x, y, z;
+        for(Node name = child.getFirstChild(); name != null; name = name.getNext()) {
+          if (!name.isName()) {
+            break;
+          }
+          name = name.cloneNode();
+          addExportEntry(name, null, name);
+        }
       }
-
-      // Extract declaration from the export statement.
-      //
-      //   export var Foo;
-      //   -> var Foo;
-      declaration.setJSDocInfo(export.getJSDocInfo());
-      export.setJSDocInfo(null);
-      parent.addChildBefore(declaration.detachFromParent(), export);
     }
-    parent.removeChild(export);
-    compiler.reportCodeChange();
   }
 
   private void addImportEntry(Node moduleRequest, Node importName, Node localName) {

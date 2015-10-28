@@ -113,6 +113,11 @@ public abstract class AbstractCompiler implements SourceExcerptProvider {
   abstract void forwardDeclareType(String typeName);
 
   /**
+   * Gets the ES6 modure registry.
+   */
+  abstract Es6ModuleRegistry getEs6ModuleRegistry();
+
+  /**
    * Gets a memoized scope creator with type information. Only used by jsdev.
    */
   abstract ScopeCreator getTypedScopeCreator();

@@ -25,10 +25,10 @@ import com.google.javascript.jscomp.Es6Module.ImportEntry;
 import com.google.javascript.jscomp.Es6Module.ExportEntry;
 import com.google.javascript.jscomp.Es6Module.ModuleNamePair;
 import com.google.javascript.rhino.Node;
+import com.google.javascript.rhino.Token;
 import com.google.javascript.rhino.JSDocInfo;
 import com.google.javascript.rhino.JSDocInfoBuilder;
 import com.google.javascript.rhino.IR;
-import com.google.javascript.rhino.TypeI;
 
 import java.util.List;
 import java.util.Set;
@@ -38,11 +38,12 @@ import java.util.Iterator;
  * Appends suffix to all global variable names defined in this module and
  * rewrites imported variables into it's original name.
  */
-public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
+public final class Es6ModuleRewrite implements HotSwapCompilerPass, NodeTraversal.Callback {
 
-  static final DiagnosticType EXPORTED_BINDING_NOT_DECLARED  = DiagnosticType.error(
-      "JSC_ES6_EXPORTED_BINDING_NOT_DECLARED",
-      "Exporting local name \"{0}\" is not declared.");
+  static final DiagnosticType EXPORTED_BINDING_NOT_DECLARED =
+      DiagnosticType.error(
+          "JSC_ES6_EXPORTED_BINDING_NOT_DECLARED",
+          "Exporting local name \"{0}\" is not declared.");
 
   static final DiagnosticType MODULE_NAMESPACE_ASSIGNMENT =
       DiagnosticType.error(
@@ -71,33 +72,66 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
 
   private static final ImmutableSet<String> USE_STRICT_ONLY = ImmutableSet.of("use strict");
 
+  private static final String DEFAULT_BIND_NAME = Es6SyntacticScopeCreator.DEFAULT_BIND_NAME;
+
   private final AbstractCompiler compiler;
   private final Es6ModuleRegistry moduleRegistry;
-  private final Es6Module module;
+  private Es6Module module;
+  private Scope moduleScope;
 
   /**
    * Creates a new Es6ModuleRewrite instance which can be used to rewrite
    * ES6 modules to a concatenable form.
    *
    * @param compiler The compiler
-   * @param moduleRegistry Module registry that holds all ES6 modules derived
-   *   from all compiler inputs.
-   * @param module Processing module.
    */
-  public Es6ModuleRewrite(AbstractCompiler compiler, Es6ModuleRegistry moduleRegistry, Es6Module module) {
+  public Es6ModuleRewrite(AbstractCompiler compiler) {
     this.compiler = compiler;
-    this.moduleRegistry = moduleRegistry;
-    this.module = module;
+    this.moduleRegistry = compiler.getEs6ModuleRegistry();
+    this.module = null;
   }
 
-  public void processFile(Node root) {
-    Preconditions.checkArgument(root.isScript() &&
-        compiler.getInput(root.getInputId()) == module.getInput());
+  @Override
+  public void process(Node externs, Node root) {
+    // Each module is its own scope, prevent building a global scope,
+    // so we can use the scope for the file.
+    // TODO: Same as ClosureRewriteModule. we need a concept of a module scope.
+    for (Node c = root.getFirstChild(); c != null; c = c.getNext()) {
+      Preconditions.checkState(c.isScript());
+      hotSwapScript(c, null);
+    }
+  }
 
-    // Need to rewriteRequires before renaming variables.
-    rewriteRequires(root);
+  @Override
+  public void hotSwapScript(Node scriptRoot, Node originalRoot) {
+    NodeTraversal.traverseEs6(compiler, scriptRoot, this);
+  }
 
-    NodeTraversal.traverseEs6(compiler, root, this);
+  @Override
+  public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
+    if (n.isScript()) {
+      CompilerInput input = t.getInput();
+      module = moduleRegistry.getModule(input);
+      moduleScope = t.getScope();
+      if (module == null) {
+        return false;
+      }
+
+      // Need to rewriteRequires before renaming variables.
+      rewriteRequires(n);
+    }
+
+    if(parent != null) {
+      switch (parent.getType()) {
+        // Since we will remove this from the tree,
+        // We don't have to rename NAMEs in these nodes.
+        case Token.IMPORT:
+        case Token.EXPORT_SPECS:
+          return false;
+      }
+    }
+
+    return true;
   }
 
   @Override
@@ -115,9 +149,77 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
       visitName(t, n, parent);
     } else if (n.isGetProp()) {
       visitGetProp(t, n, parent);
+    } else if (n.isImport()) {
+      visitImport(t, n, parent);
+    } else if (n.isExport()) {
+      visitExport(t, n, parent);
     } else if (n.isScript()) {
       visitScript(t, n);
     }
+  }
+
+  /**
+   * Rewrite ExportDeclaration into normal declaration if needed.
+   * And remove ExportDeclaration from the tree.
+   *
+   *   "export default 'someExpression' into "$default$$modueName = 'someExpression'"
+   *   "export default function()" into "var $default$$modueName = function() {}"
+   *   "export default function name()" into "function name$$moduleName() {}"
+   *   "export function name()" into "function name$$moduleName() {}"
+   *   "export var x, y" into "var x$$moduleName, y$$moduleName"
+   */
+  private void visitExport(NodeTraversal t, Node n, Node parent) {
+    Preconditions.checkState(parent.isScript());
+    if(n.getChildCount() == 1) {
+      Node child = n.getFirstChild();
+      if(child.getType() == Token.EXPORT_SPECS) {
+        // Check the exisitence of exported local names.
+        //   export {a, b as c}
+        for (Node exportSpec : child.children()) {
+          Node name = exportSpec.getFirstChild();
+          if (!moduleScope.isDeclared(name.getString(), false)) {
+            // Error if any element of the ExportedBinding of this
+            // ExportSpecifier is not declared.
+            t.report(name, EXPORTED_BINDING_NOT_DECLARED, name.getString());
+          }
+        }
+      } else {
+        // Make export declaration having local declarations into 
+        // normal declarations.
+        Node localName = null;
+        if (child.isFunction() || child.isClass()) {
+          localName = child.getFirstChild();
+        }
+
+        Node decl = child.detachFromParent();
+        if ((localName == null || localName.isEmpty() || localName.getString().isEmpty())
+            && n.getBooleanProp(Node.EXPORT_DEFAULT)) {
+          //  export default function() {}
+          //  export default class {}
+          //  export default AssingnmentExpression
+          Node name = IR.name(toGlobalName(module, DEFAULT_BIND_NAME));
+          decl = IR.var(name, child);
+          decl.useSourceInfoIfMissingFromForTree(n);
+        } else {
+          //  export default function funcName() {}
+          //  export default class ClassName {}
+          //  export function funcName() ()
+          //  export class Foo() {}
+          //  export var x,y,z
+        }
+        decl.setJSDocInfo(n.getJSDocInfo());
+        parent.addChildBefore(decl, n);
+      }
+    }
+    parent.removeChild(n);
+  }
+
+  /**
+   * Remove all ImportDeclarations.
+   */
+  private void visitImport(NodeTraversal t, Node n, Node parent) {
+    // since we already getScope() we can remove this declaration here.
+    parent.removeChild(n);
   }
 
   /**
@@ -127,19 +229,11 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
    * @see "http://www.ecma-international.org/ecma-262/6.0/#sec-module-environment-records-getthisbinding"
    */
   private void visitThis(NodeTraversal t, Node n, Node parent) {
-    if(t.getScope().isGlobal()) {
+    if(t.getScope() == moduleScope) {
       // Note: We don't have to care about assignment to `this` here,
       // because the parser should already prohibited that.
       parent.replaceChild(n, IR.name("undefined").srcref(n));
     }
-  }
-
-  private String toGlobalName(ModuleNamePair binding) {
-    return toGlobalName(binding.module, binding.name);
-  }
-
-  private String toGlobalName(Es6Module module, String name) {
-    return name + "$$" + moduleRegistry.getModuleName(module);
   }
 
   /**
@@ -156,36 +250,16 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
    */
   private void visitName(NodeTraversal t, Node n, Node parent) {
     String name = n.getString();
-
     Var var = t.getScope().getVar(name);
-    if (var != null && var.isGlobal()) {
-      // Add module name suffix to global variables to avoid polluting the global namespace.
-      // "foo" -> "foo$$moduleName"
-      n.setString(toGlobalName(module, name));
-      n.putProp(Node.ORIGINALNAME_PROP, name);
-      return;
-    } else if (var == null) {
-      ImportEntry in = module.getImportEntry(name);
-      if(in != null) {
-        // Replace imporeted bindings with original bindings.
-        if (NodeUtil.isAssignmentTarget(n)) {
-          // All imported bindings are immutable.
-          t.report(n, IMPORTED_BINDING_ASSIGNMENT);
-          return;
-        }
-        Es6Module importedModule = moduleRegistry.resolveImportedModule(module, in.getModuleRequest());
-        Preconditions.checkState(importedModule != null);
-        ModuleNamePair binding = in.getImportName() == null
-          //   import * as ns from "mod"
-          ? new ModuleNamePair(importedModule, null)
-          //   import {a} from "mod"
-          //   import a from "mod"
-          : importedModule.resolveExport(in.getImportName());
 
-        Preconditions.checkState(binding != null);
-
-        rewriteImportedBinding(t, n, parent, binding, null);
+    if(var != null && var.getScope() == moduleScope) {
+      ModuleNamePair binding = resolveModuleBinding(name);
+      if (binding.module != module && NodeUtil.isAssignmentTarget(n)) {
+        // Imported bindings are immutable.
+        t.report(n, IMPORTED_BINDING_ASSIGNMENT);
+        return;
       }
+      rewriteWithBinding(t, n, parent, binding, null);
     }
   }
 
@@ -236,30 +310,59 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
       Es6Module.Namespace ns = moduleRegistry.getModuleNamespace(target.getString());
       String propertyName = target.getNext().getString();
       ModuleNamePair binding = ns.get(propertyName);
-      if(binding == null) {
+      if (binding == null) {
         t.report(target.getNext(), Es6ModuleRegistry.RESOLVE_EXPORT_FAILURE,
             moduleRegistry.getModuleName(ns.getModule()), propertyName);
         return;
       }
 
       String origName = (String) target.getProp(Node.ORIGINALNAME_PROP);
-      if(origName == null) {
+      if (origName == null) {
         origName = target.getString();
       }
-      rewriteImportedBinding(t, n, parent, binding, origName + "." + propertyName);
-
       // Call on module namespace object properties can be considered as FREE_CALL.
-      if(parent.isCall()) {
+      if(parent.isCall() && parent.getFirstChild() == n) {
         parent.putBooleanProp(Node.FREE_CALL, true);
       }
 
+      rewriteWithBinding(t, n, parent, binding, origName + "." + propertyName);
+    }
+  }
+
+  private String toGlobalName(ModuleNamePair binding) {
+    return toGlobalName(binding.module, binding.name);
+  }
+
+  private String toGlobalName(Es6Module module, String name) {
+    return name + "$$" + moduleRegistry.getModuleName(module);
+  }
+
+  /**
+   * Resolve NAME in current module scope.
+   */
+  private ModuleNamePair resolveModuleBinding(String name) {
+
+    ImportEntry in = module.getImportEntry(name);
+    if(in == null) {
+      // module local binding.
+      return new ModuleNamePair(module, name);
+    } else {
+      // imported binding.
+      Es6Module importedModule = moduleRegistry.resolveImportedModule(module, in.getModuleRequest());
+      Preconditions.checkState(importedModule != null);
+      return in.getImportName() == null
+          //   import * as ns from "mod"
+          ? new ModuleNamePair(importedModule, null)
+          //   import {a} from "mod"
+          //   import a from "mod"
+          : importedModule.resolveExport(in.getImportName());
     }
   }
 
   /**
-   * Replace resolved bindings with its orignal bindings.
+   * Replace resolved binding with its orignal binding.
    */
-  private void rewriteImportedBinding(NodeTraversal t, Node n, Node parent,
+  private void rewriteWithBinding(NodeTraversal t, Node n, Node parent,
       ModuleNamePair binding, String originalName) {
 
     String newName;
@@ -278,12 +381,18 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
       newName = toGlobalName(binding);
     }
 
-    Node ref = NodeUtil.newName(compiler, newName, n);
-    if (originalName != null) {
-      ref.putProp(Node.ORIGINALNAME_PROP, originalName);
+    if(n.isName()) {
+      n.setString(newName);
+      if (originalName != null) {
+        n.putProp(Node.ORIGINALNAME_PROP, originalName);
+      }
+    } else {
+      Node ref = NodeUtil.newName(compiler, newName, n);
+      if (originalName != null) {
+        ref.putProp(Node.ORIGINALNAME_PROP, originalName);
+      }
+      parent.replaceChild(n, ref);
     }
-
-    parent.replaceChild(n, ref);
   }
 
   /**
@@ -312,9 +421,7 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
 
     String name = n.getString();
 
-    String newName = null;
-    Es6Module.Namespace namespace = null;
-
+    ModuleNamePair binding;
     List<String> rest = ImmutableList.of();
 
     if(ES6ModuleLoader.isRelativeIdentifier(name)) {
@@ -330,7 +437,7 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
         t.report(n, ES6ModuleLoader.LOAD_ERROR, required);
         return;
       }
-      namespace = mod.getNamespace();
+      binding = new ModuleNamePair(mod, null);
       if(endIndex >= 0) {
         rest = Splitter.on('.').splitToList(name.substring(endIndex + 1));
       }
@@ -340,56 +447,42 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
       rest = splitted.subList(1, splitted.size());
 
       Var var = t.getScope().getVar(baseName);
-      if (var != null && var.isGlobal()) {
-        //   @type {fileLocalVar.Foo}
-        newName = toGlobalName(module, baseName);
+      if (var != null && var.getScope() == moduleScope) {
+        binding = resolveModuleBinding(baseName);
       } else {
-        //   @type {importedName.foo.Bar}
-        //   @type {importedNamespace.foo.Bar}
-        ImportEntry in = module.getImportEntry(baseName);
-        if (in != null) {
-          Es6Module importedModule = moduleRegistry.resolveImportedModule(module, in.getModuleRequest());
-          Preconditions.checkState(importedModule != null);
-          if (in.getImportName() == null) {
-            namespace = importedModule.getNamespace();
-          } else {
-            ModuleNamePair binding = importedModule.resolveExport(in.getImportName());
-            Preconditions.checkState(binding != null && binding.name != null);
-            newName = toGlobalName(binding);
-          }
-        } else {
-          // Not file global nor imported.
-          return;
-        }
+        // Not file global nor imported.
+        return;
       }
     }
 
     // Resolve and collapse imported module namespace object property path.
-    if (namespace != null) {
+    if (binding.name == null) {
       Iterator<String> path = rest.iterator();
-      while (namespace != null) {
+      do {
         if (!path.hasNext()) {
           t.report(n, MODULE_NAMESPACE_NON_GETPROP);
           return;
         }
         String propertyName = path.next();
-        ModuleNamePair binding = namespace.get(propertyName);
-        if(binding == null) {
+        ModuleNamePair resolved = binding.module.getNamespace().get(propertyName);
+        /*
+        ModuleNamePair resolved = binding.module == this.module
+            ? resolveModuleBinding(propertyName)
+            : binding.module.getNamespace().get(propertyName);
+        */
+        if(resolved == null) {
           t.report(n, Es6ModuleRegistry.RESOLVE_EXPORT_FAILURE,
-              moduleRegistry.getModuleName(namespace.getModule()), propertyName);
+              moduleRegistry.getModuleName(binding.module), propertyName);
           return;
         }
-        if(binding.name == null) {
-          namespace = binding.module.getNamespace();
-        } else {
-          namespace = null;
-          newName = toGlobalName(binding);
-          rest = ImmutableList.copyOf(path);
-        }
-      }
+        binding = resolved;
+      } while (binding.name == null);
+
+      rest = ImmutableList.copyOf(path);
     }
 
-    Preconditions.checkState(newName != null);
+    Preconditions.checkState(binding.name != null);
+    String newName = toGlobalName(binding);
     if(!rest.isEmpty()) {
       newName += "." + Joiner.on('.').join(rest);
     }
@@ -401,16 +494,6 @@ public final class Es6ModuleRewrite extends AbstractPostOrderCallback {
    * Misc SCRIPT root processings.
    */
   private void visitScript(NodeTraversal t, Node n) {
-
-    // Check the existence of all local export names.
-    for(ExportEntry ee : module.getLocalExportEntries()) {
-      String localName = ee.getLocalName();
-      if (t.getScope().getVar(localName) == null) {
-        // Error if any element of the ExportedBinding of this
-        // ExportSpecifier is not declared.
-        t.report(ee.getLocalNameNode(), EXPORTED_BINDING_NOT_DECLARED, localName);
-      }
-    }
 
     // Do nothing if empty.
     if(n.getChildCount() == 0) {

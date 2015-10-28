@@ -203,6 +203,9 @@ public final class DefaultPassConfig extends PassConfig {
             && options.getLanguageOut() != LanguageMode.ECMASCRIPT6_TYPED) {
       checks.add(convertEs6TypedToEs6);
     }
+    if (options.getLanguageIn().isEs6OrHigher()) {
+      checks.add(es6RewriteModule);
+    }
 
     checks.add(checkVariableReferences);
 
@@ -1137,6 +1140,14 @@ public final class DefaultPassConfig extends PassConfig {
           options.getAliasTransformationHandler());
     }
   };
+
+  private final PassFactory es6RewriteModule =
+      new PassFactory("Es6RewriteModule", true) {
+        @Override
+        protected CompilerPass create(final AbstractCompiler compiler) {
+          return new Es6ModuleRewrite(compiler);
+        }
+      };
 
   private final PassFactory es6RuntimeLibrary =
       new PassFactory("Es6RuntimeLibrary", true) {

@@ -77,6 +77,7 @@ public final class CheckConformanceTest extends CompilerTestCase {
     enableClosurePass();
     enableClosurePassForExpected();
     enableRewriteClosureCode();
+    enableRewriteEs6Module();
     setLanguage(LanguageMode.ECMASCRIPT6_STRICT, LanguageMode.ECMASCRIPT5_STRICT);
   }
 

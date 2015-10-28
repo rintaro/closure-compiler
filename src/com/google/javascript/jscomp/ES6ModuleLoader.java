@@ -47,12 +47,25 @@ public final class ES6ModuleLoader {
   private final Set<URI> moduleUris;
 
   /**
-   * Creates an instance of the module loader which can be used to locate ES6 and CommonJS modules.
+   * Creates an instance of the module loader and register initial inputs to the loader.
    *
    * @param moduleRoots The root directories to locate modules in.
    * @param inputs All inputs to the compilation process.
    */
   public ES6ModuleLoader(List<String> moduleRoots, Iterable<CompilerInput> inputs) {
+    this(moduleRoots);
+    for (CompilerInput input : inputs) {
+      addInput(input);
+    }
+  }
+
+  /**
+   * Creates an instance of the module loader which can be used to locate ES6 and CommonJS modules.
+   *
+   * @param moduleRoots The root directories to locate modules in.
+   */
+  public ES6ModuleLoader(List<String> moduleRoots) {
+    this.moduleUris = new HashSet<>();
     this.moduleRootUris =
         Lists.transform(
             moduleRoots,
@@ -62,13 +75,14 @@ public final class ES6ModuleLoader {
                 return createUri(path);
               }
             });
-    this.moduleUris = new HashSet<>();
-    for (CompilerInput input : inputs) {
-      if (!moduleUris.add(normalizeInputAddress(input))) {
-        // Having root URIs "a" and "b" and source files "a/f.js" and "b/f.js" is ambiguous.
-        throw new IllegalArgumentException(
-            "Duplicate module URI after resolving: " + input.getName());
-      }
+  }
+
+
+  public void addInput(CompilerInput input) {
+    if (!moduleUris.add(normalizeInputAddress(input))) {
+      // Having root URIs "a" and "b" and source files "a/f.js" and "b/f.js" is ambiguous.
+      throw new IllegalArgumentException(
+          "Duplicate module URI after resolving: " + input.getName());
     }
   }
 

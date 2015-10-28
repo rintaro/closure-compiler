@@ -192,6 +192,9 @@ public class Compiler extends AbstractCompiler {
   /** Detects Google-specific coding conventions. */
   CodingConvention defaultCodingConvention = new ClosureCodingConvention();
 
+  // Populated in processEs6Module, used from Es6RewriteModule
+  private Es6ModuleRegistry es6ModuleRegistry = null;
+
   private JSTypeRegistry typeRegistry;
   private Config parserConfig = null;
   private Config externsParserConfig = null;
@@ -1123,6 +1126,15 @@ public class Compiler extends AbstractCompiler {
   }
 
   @Override
+  Es6ModuleRegistry getEs6ModuleRegistry() {
+    if (es6ModuleRegistry == null) {
+      ES6ModuleLoader loader = new ES6ModuleLoader(options.moduleRoots);
+      es6ModuleRegistry = new Es6ModuleRegistry(this, loader);
+    }
+    return es6ModuleRegistry;
+  }
+
+  @Override
   public TypeIRegistry getTypeIRegistry() {
     return getTypeRegistry();
   }
@@ -1465,34 +1477,23 @@ public class Compiler extends AbstractCompiler {
    * to original names.
    */
   void processEs6Modules() {
-    ES6ModuleLoader loader = new ES6ModuleLoader(options.moduleRoots, inputs);
-    Es6ModuleRegistry registry = new Es6ModuleRegistry(this, loader);
+
+    Es6ModuleRegistry registry = getEs6ModuleRegistry();
 
     // parse
     for (CompilerInput input : inputs) {
       Es6ParseModule parse = new Es6ParseModule(this);
-      input.setCompiler(this);
       Node root = input.getAstRoot(this);
       if (root == null) {
         continue;
       }
       parse.processFile(root);
+      input.setCompiler(this);
       registry.addModule(input, parse.moduleRequests, parse.importEntries, parse.exportEntries);
     }
 
     // resolve module dependencies
     registry.instantiateAllModules();
-    if(hasErrors()) {
-      return;
-    }
-
-    // rewrite
-    for (Es6Module module : registry.getModules()) {
-      Es6ModuleRewrite rewrite = new Es6ModuleRewrite(this, registry, module);
-      CompilerInput input = module.getInput();
-      Node root = input.getAstRoot(this);
-      rewrite.processFile(root);
-    }
   }
 
   /**

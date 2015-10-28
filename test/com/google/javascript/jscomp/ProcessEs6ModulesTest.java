@@ -54,13 +54,8 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
   }
 
   @Override
-  protected CompilerPass getProcessor(Compiler compiler) {
-    return new CompilerPass() {
-      @Override
-      public void process(Node externs, Node root) {
-        // No-op, ES6 module handling is done directly after parsing.
-      }
-    };
+  public CompilerPass getProcessor(Compiler compiler) {
+    return new Es6ModuleRewrite(compiler);
   }
 
   @Override
@@ -349,7 +344,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
                 "import z from 'other';",
                 "import {x as z} from 'other';")),
         null,
-        Es6ModuleRegistry.DUPLICATED_IMPORTED_BOUND_NAMES);
+        Es6ParseModule.DUPLICATED_IMPORTED_BOUND_NAMES);
 
     test(
         ImmutableList.of(
@@ -358,7 +353,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
                 "import {default as z} from 'other';",
                 "import {x as z} from 'other';")),
         null,
-        Es6ModuleRegistry.DUPLICATED_IMPORTED_BOUND_NAMES);
+        Es6ParseModule.DUPLICATED_IMPORTED_BOUND_NAMES);
 
     test(
         ImmutableList.of(
@@ -366,7 +361,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             source("main.js",
                 "import {x as z, default as z} from 'other';")),
         null,
-        Es6ModuleRegistry.DUPLICATED_IMPORTED_BOUND_NAMES);
+        Es6ParseModule.DUPLICATED_IMPORTED_BOUND_NAMES);
 
     test(
         ImmutableList.of(
@@ -374,7 +369,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             source("main.js",
                 "import z, {x as z} from 'other';")),
         null,
-        Es6ModuleRegistry.DUPLICATED_IMPORTED_BOUND_NAMES);
+        Es6ParseModule.DUPLICATED_IMPORTED_BOUND_NAMES);
   }
 
   public void testImportAndExport() {
@@ -685,15 +680,6 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
           "export var name;",
           "/** @param {./module/does/not/exists.Foo} arg */ function f(arg) {}"),
         ES6ModuleLoader.LOAD_ERROR);
-  }
-
-  public void testExportNameNotDeclared() {
-    testError(
-        "export {name}",
-        Es6ModuleRewrite.EXPORTED_BINDING_NOT_DECLARED);
-    testError(
-        "var name; export {foo as name};",
-        Es6ModuleRewrite.EXPORTED_BINDING_NOT_DECLARED);
   }
 
   public void assignImportedName() {

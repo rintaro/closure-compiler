@@ -74,6 +74,9 @@ public abstract class CompilerTestCase extends TestCase {
 
   /** Whether to rewrite Closure code before the test is run. */
   private boolean rewriteClosureCode = false;
+  
+  /** Whether to rewrite ES6 module code befere the test is run */
+  private boolean rewriteEs6Module = false;
 
   /** True iff type checking pass runs before pass being tested. */
   private boolean typeCheckEnabled = false;
@@ -340,6 +343,13 @@ public abstract class CompilerTestCase extends TestCase {
    */
   void enableRewriteClosureCode() {
     rewriteClosureCode = true;
+  }
+
+  /**
+   * Rewrite ES6 module code before the test is run.
+   */
+  void enableRewriteEs6Module() {
+    rewriteEs6Module = true;
   }
 
   /**
@@ -1068,7 +1078,6 @@ public abstract class CompilerTestCase extends TestCase {
     ErrorManager[] errorManagers = new ErrorManager[numRepetitions];
     int aggregateWarningCount = 0;
     List<JSError> aggregateWarnings = new ArrayList<>();
-    recentChange.reset();
     boolean hasCodeChanged = false;
 
     for (int i = 0; i < numRepetitions; ++i) {
@@ -1089,6 +1098,13 @@ public abstract class CompilerTestCase extends TestCase {
           recentChange.reset();
           new ProcessClosurePrimitives(compiler, null, CheckLevel.ERROR, false)
               .process(null, mainRoot);
+          hasCodeChanged = hasCodeChanged || recentChange.hasCodeChanged();
+        }
+
+        // Only run process ES6 module once, if asked.
+        if (rewriteEs6Module && i == 0) {
+          recentChange.reset();
+          new Es6ModuleRewrite(compiler).process(null, mainRoot);
           hasCodeChanged = hasCodeChanged || recentChange.hasCodeChanged();
         }
 
