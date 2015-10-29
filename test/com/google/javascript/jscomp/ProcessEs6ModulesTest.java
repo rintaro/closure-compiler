@@ -16,7 +16,7 @@
 
 package com.google.javascript.jscomp;
 
-import static com.google.javascript.jscomp.ProcessEs6Modules.LHS_OF_GOOG_REQUIRE_MUST_BE_CONST;
+import static com.google.javascript.jscomp.Es6RewriteModule.LHS_OF_GOOG_REQUIRE_MUST_BE_CONST;
 
 import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
@@ -859,31 +859,42 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
   }
 
   public void testGoogRequiresDestructuring_rewrite() {
-    testModules(
-        LINE_JOINER.join(
-            "import * as s from 'other';",
-            "const {foo, bar} = goog.require('some.name.space');",
-            "use(foo, bar);"),
-        LINE_JOINER.join(
-            "goog.require('some.name.space')",
-            "const {",
-            "  foo: foo$$module$testcode,",
-            "  bar: bar$$module$testcode,",
-            "} = some.name.space;",
-            "use(foo$$module$testcode, bar$$module$testcode);"));
+    test(
+        ImmutableList.of(
+            source("other.js"),
+            source("main.js",
+                "import * as s from 'other';",
+                "const {foo, bar} = goog.require('some.name.space');",
+                "use(foo, bar);")),
+        ImmutableList.of(
+            source("other.js"),
+            source("main.js",
+                FILE_OVERVIEW,
+                "goog.require('some.name.space')",
+                "const {",
+                "  foo: foo$$module$main,",
+                "  bar: bar$$module$main,",
+                "} = some.name.space;",
+                "use(foo$$module$main, bar$$module$main);")));
 
-    testModules(
-        LINE_JOINER.join(
-            "import * as s from 'other';",
-            "var {foo, bar} = goog.require('some.name.space');",
-            "use(foo, bar);"),
+    test(
+        ImmutableList.of(
+            source("other.js"),
+            source("main.js",
+                "import * as s from 'other';",
+                "var {foo, bar} = goog.require('some.name.space');",
+                "use(foo, bar);")),
+        null,
         LHS_OF_GOOG_REQUIRE_MUST_BE_CONST);
 
-    testModules(
-        LINE_JOINER.join(
-            "import * as s from 'other';",
-            "let {foo, bar} = goog.require('some.name.space');",
-            "use(foo, bar);"),
+    test(
+        ImmutableList.of(
+            source("other.js"),
+            source("main.js",
+                "import * as s from 'other';",
+                "let {foo, bar} = goog.require('some.name.space');",
+                "use(foo, bar);")),
+        null,
         LHS_OF_GOOG_REQUIRE_MUST_BE_CONST);
   }
 }

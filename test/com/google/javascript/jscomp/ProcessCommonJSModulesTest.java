@@ -59,8 +59,36 @@ public final class ProcessCommonJSModulesTest extends CompilerTestCase {
     return 1;
   }
 
-  void testModules(String input, String expected) {
-    ProcessEs6ModulesTest.testModules(this, input, expected);
+  private void testModules(String input, String expected) {
+    // Shared with ProcessCommonJSModulesTest.
+    String fileName = getFilename() + ".js";
+    ImmutableList<SourceFile> inputs =
+        ImmutableList.of(SourceFile.fromCode("other.js", ""), SourceFile.fromCode(fileName, input));
+    String fileoverview =
+        LINE_JOINER.join(
+            "/** @fileoverview",
+            " * @suppress {missingProvide|missingRequire}",
+            " */");
+    ImmutableList<SourceFile> expecteds =
+        ImmutableList.of(
+            SourceFile.fromCode("other.js", ""),
+            SourceFile.fromCode(fileName, fileoverview + expected));
+    test(inputs, expecteds);
+  }
+
+  private void testModules(ImmutableList<SourceFile> inputs, String expected) {
+    ImmutableList<SourceFile> expecteds =
+        ImmutableList.of(
+            SourceFile.fromCode("other.js", ""),
+            SourceFile.fromCode(getFilename() + ".js", expected));
+    test(inputs, expecteds);
+  }
+
+  private void testModules(String input, DiagnosticType error) {
+    String fileName = getFilename() + ".js";
+    ImmutableList<SourceFile> inputs =
+        ImmutableList.of(SourceFile.fromCode("other.js", ""), SourceFile.fromCode(fileName, input));
+    test(inputs, null, error);
   }
 
   public void testWithoutExports() {
@@ -72,18 +100,17 @@ public final class ProcessCommonJSModulesTest extends CompilerTestCase {
             + "var name$$module$test = module$other;"
             + "name$$module$test();");
     setFilename("test/sub");
-    ProcessEs6ModulesTest.testModules(
-        this,
+    testModules(
         ImmutableList.of(
             SourceFile.fromCode(Compiler.joinPathParts("mod", "name.js"), ""),
             SourceFile.fromCode(
                 Compiler.joinPathParts("test", "sub.js"),
                 "var name = require('mod/name');"
                 + "(function() { name(); })();")),
-                "goog.provide('module$test$sub');"
-                + "goog.require('module$mod$name');"
-                + "var name$$module$test$sub = module$mod$name;"
-                + "(function() { name$$module$test$sub(); })();");
+        "goog.provide('module$test$sub');"
+            + "goog.require('module$mod$name');"
+            + "var name$$module$test$sub = module$mod$name;"
+            + "(function() { name$$module$test$sub(); })();");
   }
 
   public void testExports() {
@@ -158,8 +185,7 @@ public final class ProcessCommonJSModulesTest extends CompilerTestCase {
         "goog.provide('module$foo$bar');"
             + "goog.require('module$other');"
             + "var name$$module$foo$bar = module$other;");
-    ProcessEs6ModulesTest.testModules(
-        this,
+    testModules(
         ImmutableList.of(
             SourceFile.fromCode(Compiler.joinPathParts("foo", "name.js"), ""),
             SourceFile.fromCode(Compiler.joinPathParts("foo", "bar.js"), "var name = require('./name');")),
