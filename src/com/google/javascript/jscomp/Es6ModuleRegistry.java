@@ -38,8 +38,6 @@ import java.util.LinkedHashMap;
  * And emulate host wide semantics in module processing.
  */
 class Es6ModuleRegistry {
-
-
   static final DiagnosticType DUPLICATED_EXPORT_NAMES = DiagnosticType.error(
       "JSC_ES6_DUPLICATED_EXPORT_NAMES",
       "Duplicated export name: {0}");
@@ -53,13 +51,22 @@ class Es6ModuleRegistry {
   // For error reporting.
   private AbstractCompiler compiler;
   private ES6ModuleLoader loader;
-  private BiMap<String, Es6Module> moduleMap = HashBiMap.create();
+  private BiMap<String, Es6Module> moduleMap;
 
   public Es6ModuleRegistry(AbstractCompiler compiler, ES6ModuleLoader loader) {
     this.compiler = compiler;
     this.loader = loader;
+    this.moduleMap = HashBiMap.create();
   }
 
+  /**
+   * Add module record to the registry.
+   *
+   * Added entry may be a non-module (i.e. script). In case of that,
+   * the entry will be pruned from the registry in instantiateAllModules().
+   *
+   * @see #instantiateAllModules
+   */
   public void addModule(CompilerInput input,
       List<Node> requestedModules,
       List<ImportEntry> importEntries,
@@ -134,6 +141,12 @@ class Es6ModuleRegistry {
 
   /**
    * Rough impletation of ModuleDeclarationInstantiation() in ES6 specification.
+   *
+   * 1) declare addProvide() and addRequire() for module dependency graph.
+   * 2) ensure all required modules are resolvable.
+   * 3) ensure all indirect exports are resolvable.
+   * 4) ensure all imported bindings are resolvable.
+   * 5) prune non module entries from the registry.
    *
    * @see "http://www.ecma-international.org/ecma-262/6.0/#sec-moduledeclarationinstantiation"
    */
@@ -218,13 +231,6 @@ class Es6ModuleRegistry {
   }
 
   /**
-   * Returns all ES6Module record objects this registry contains.
-   */
-  public Set<Es6Module> getModules() {
-    return moduleMap.values();
-  }
-
-  /**
    * Returns canonical module name for specified ES6Module object.
    */
   public String getModuleName(Es6Module module) {
@@ -238,16 +244,14 @@ class Es6ModuleRegistry {
    * @see "http://www.ecma-international.org/ecma-262/6.0/#sec-hostresolveimportedmodule"
    */
   public Es6Module resolveImportedModule(Es6Module module, String specifier) {
-    URI loadAddress = loader.locateEs6Module(specifier, module.getInput());
-    if(loadAddress == null) {
-      return null;
-    }
-    String moduleName = ES6ModuleLoader.toModuleName(loadAddress);
-    return moduleMap.get(moduleName);
+    return getModule(loader.locateEs6Module(specifier, module.getInput()));
   }
 
   public Es6Module getModule(CompilerInput input) {
-    URI loadAddress = loader.normalizeInputAddress(input);
+    return getModule(loader.normalizeInputAddress(input));
+  }
+
+  private Es6Module getModule(URI loadAddress) {
     if(loadAddress == null) {
       return null;
     }

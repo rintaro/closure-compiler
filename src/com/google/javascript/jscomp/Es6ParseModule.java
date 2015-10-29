@@ -15,6 +15,8 @@
  */
 package com.google.javascript.jscomp;
 
+import static com.google.javascript.jscomp.Es6SyntacticScopeCreator.DEFAULT_BIND_NAME;
+
 import com.google.common.base.Preconditions;
 import com.google.javascript.jscomp.NodeTraversal.AbstractShallowCallback;
 import com.google.javascript.jscomp.Es6Module.ImportEntry;
@@ -44,7 +46,6 @@ public final class Es6ParseModule extends AbstractShallowCallback {
       "JSC_ES6_DUPLICATED_IMPORTED_BOUND_NAMES",
       "Duplicated imported bound name: {0}");
 
-  private static final String DEFAULT_BIND_NAME = Es6SyntacticScopeCreator.DEFAULT_BIND_NAME;
   private static final String DEFAULT_EXPORT_NAME = "default";
   private final AbstractCompiler compiler;
 

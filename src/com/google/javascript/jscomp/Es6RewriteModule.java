@@ -15,6 +15,8 @@
  */
 package com.google.javascript.jscomp;
 
+import static com.google.javascript.jscomp.Es6SyntacticScopeCreator.DEFAULT_BIND_NAME;
+
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.base.Joiner;
@@ -72,11 +74,12 @@ public final class Es6RewriteModule implements HotSwapCompilerPass, NodeTraversa
 
   private static final ImmutableSet<String> USE_STRICT_ONLY = ImmutableSet.of("use strict");
 
-  private static final String DEFAULT_BIND_NAME = Es6SyntacticScopeCreator.DEFAULT_BIND_NAME;
-
   private final AbstractCompiler compiler;
   private final Es6ModuleRegistry moduleRegistry;
+
+  // Module scope that we are currently processing
   private Es6Module module;
+  // Module namespace scope that we are currently processing
   private Scope moduleScope;
 
   /**
@@ -110,12 +113,18 @@ public final class Es6RewriteModule implements HotSwapCompilerPass, NodeTraversa
   @Override
   public boolean shouldTraverse(NodeTraversal t, Node n, Node parent) {
     if (n.isScript()) {
+
+      // Do nothing if empty.
+      if(!n.hasChildren()) {
+        return false;
+      }
+
       CompilerInput input = t.getInput();
       module = moduleRegistry.getModule(input);
-      moduleScope = t.getScope();
       if (module == null) {
         return false;
       }
+      moduleScope = t.getScope();
 
       // Need to rewriteRequires before renaming variables.
       rewriteRequires(n);
@@ -123,7 +132,7 @@ public final class Es6RewriteModule implements HotSwapCompilerPass, NodeTraversa
 
     if(parent != null) {
       switch (parent.getType()) {
-        // Since we will remove this from the tree,
+        // Since we will remove these nodes from the tree,
         // We don't have to rename NAMEs in these nodes.
         case Token.IMPORT:
         case Token.EXPORT_SPECS:
@@ -143,18 +152,13 @@ public final class Es6RewriteModule implements HotSwapCompilerPass, NodeTraversa
       }
     }
 
-    if (n.isThis()) {
-      visitThis(t, n, parent);
-    } else if (n.isName()) {
-      visitName(t, n, parent);
-    } else if (n.isGetProp()) {
-      visitGetProp(t, n, parent);
-    } else if (n.isImport()) {
-      visitImport(t, n, parent);
-    } else if (n.isExport()) {
-      visitExport(t, n, parent);
-    } else if (n.isScript()) {
-      visitScript(t, n);
+    switch (n.getType()) {
+      case Token.THIS: visitThis(t, n, parent); break;
+      case Token.NAME: visitName(t, n, parent); break;
+      case Token.GETPROP: visitGetProp(t, n, parent); break;
+      case Token.IMPORT: visitImport(t, n, parent); break;
+      case Token.EXPORT: visitExport(t, n, parent); break;
+      case Token.SCRIPT: visitScript(t, n); break;
     }
   }
 
@@ -170,7 +174,7 @@ public final class Es6RewriteModule implements HotSwapCompilerPass, NodeTraversa
    */
   private void visitExport(NodeTraversal t, Node n, Node parent) {
     Preconditions.checkState(parent.isScript());
-    if(n.getChildCount() == 1) {
+    if(n.hasOneChild()) {
       Node child = n.getFirstChild();
       if(child.getType() == Token.EXPORT_SPECS) {
         // Check the exisitence of exported local names.
@@ -218,13 +222,13 @@ public final class Es6RewriteModule implements HotSwapCompilerPass, NodeTraversa
    * Remove all ImportDeclarations.
    */
   private void visitImport(NodeTraversal t, Node n, Node parent) {
-    // since we already getScope() we can remove this declaration here.
+    // since we already getScope() we can safely remove this declaration here.
     parent.removeChild(n);
   }
 
   /**
    * Rewrites global {@code this} into {@code undefined}.
-   * Global `this` value in Module Environment Record is always `undefined`.
+   * Global {@code this} value in Module Environment Record is always `undefined`.
    *
    * @see "http://www.ecma-international.org/ecma-262/6.0/#sec-module-environment-records-getthisbinding"
    */
@@ -465,11 +469,6 @@ public final class Es6RewriteModule implements HotSwapCompilerPass, NodeTraversa
         }
         String propertyName = path.next();
         ModuleNamePair resolved = binding.module.getNamespace().get(propertyName);
-        /*
-        ModuleNamePair resolved = binding.module == this.module
-            ? resolveModuleBinding(propertyName)
-            : binding.module.getNamespace().get(propertyName);
-        */
         if(resolved == null) {
           t.report(n, Es6ModuleRegistry.RESOLVE_EXPORT_FAILURE,
               moduleRegistry.getModuleName(binding.module), propertyName);
@@ -496,7 +495,11 @@ public final class Es6RewriteModule implements HotSwapCompilerPass, NodeTraversa
   private void visitScript(NodeTraversal t, Node n) {
 
     // Do nothing if empty.
-    if(n.getChildCount() == 0) {
+    // If it's empty, all nodes were removed from the tree. Eg.
+    //
+    //   import * as ns from 'mod';
+    //   export {ns};
+    if(!n.hasChildren()) {
       return;
     }
 
