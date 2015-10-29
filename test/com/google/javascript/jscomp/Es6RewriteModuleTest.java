@@ -22,6 +22,9 @@ import com.google.common.collect.ImmutableList;
 import com.google.javascript.jscomp.CompilerOptions.LanguageMode;
 import com.google.javascript.rhino.Node;
 
+import java.util.List;
+import java.util.ArrayList;
+
 /**
  * Unit tests for {@link ProcessEs6Modules}
  */
@@ -896,5 +899,42 @@ public final class Es6RewriteModuleTest extends CompilerTestCase {
                 "use(foo, bar);")),
         null,
         LHS_OF_GOOG_REQUIRE_MUST_BE_CONST);
+  }
+
+  public void testSortInputs() throws Exception {
+    SourceFile a = source("a.js", "import 'b'; import 'c'");
+    SourceFile b = source("b.js", "import 'd'");
+    SourceFile c = source("c.js", "import 'd'");
+    SourceFile d = source("d.js", "1;");
+
+    // NOTE: The order of (b, c) is not important here. We are testing whether
+    // addProvide(), addRequire() is properly working or not.
+    assertSortedInputs(ImmutableList.of(a, b, c, d), ImmutableList.of(d, c, b, a));
+    assertSortedInputs(ImmutableList.of(d, b, c, a), ImmutableList.of(d, b, c, a));
+    assertSortedInputs(ImmutableList.of(d, c, b, a), ImmutableList.of(d, c, b, a));
+    assertSortedInputs(ImmutableList.of(d, a, b, c), ImmutableList.of(d, c, b, a));
+  }
+
+  private void assertSortedInputs(List<SourceFile> shuffled, List<SourceFile> expected)
+      throws Exception {
+
+    CompilerOptions options = new CompilerOptions();
+    options.setLanguageIn(LanguageMode.ECMASCRIPT6);
+    options.setLanguageOut(LanguageMode.ECMASCRIPT5);
+    options
+        .getDependencyOptions()
+        .setDependencySorting(true)
+        .setEs6ModuleOrder(true);
+
+    Compiler compiler = new Compiler(System.err);
+    compiler.init(new ArrayList<SourceFile>(), shuffled, options);
+    compiler.parseInputs();
+
+    List<SourceFile> result = new ArrayList<>(expected.size());
+    for (CompilerInput i : compiler.getInputsInOrder()) {
+      result.add(i.getSourceFile());
+    }
+
+    assertEquals(expected, result);
   }
 }
