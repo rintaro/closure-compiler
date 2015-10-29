@@ -184,7 +184,7 @@ public final class Es6ParseModule extends AbstractShallowCallback {
             : localName;
         addExportEntry(exportName, moduleRequest, localName);
       }
-      if(moduleRequest != null) {
+      if (moduleRequest != null) {
         moduleRequests.add(moduleRequest);
       }
     } else {
@@ -196,7 +196,7 @@ public final class Es6ParseModule extends AbstractShallowCallback {
         addExportEntry(localName, null, localName);
       } else {
         //    export var x, y, z;
-        for(Node name = child.getFirstChild(); name != null; name = name.getNext()) {
+        for (Node name : child.children()) {
           if (!name.isName()) {
             break;
           }

@@ -220,12 +220,12 @@ class Es6SyntacticScopeCreator implements ScopeCreator {
 
       case Token.IMPORT:
         Node defaultImport = n.getChildAtIndex(0);
-        if(!defaultImport.isEmpty()) {
+        if (!defaultImport.isEmpty()) {
           // import name from ..
           declareVar(defaultImport);
         }
         Node otherImport = n.getChildAtIndex(1);
-        if(!otherImport.isEmpty()) {
+        if (!otherImport.isEmpty()) {
           switch (otherImport.getType()) {
             case Token.IMPORT_SPECS:
               // import {a, b as c} from ..

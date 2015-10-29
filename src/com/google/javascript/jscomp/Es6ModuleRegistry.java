@@ -123,7 +123,7 @@ class Es6ModuleRegistry {
                   ie.getImportNameNode()));
         }
       } else {
-        if(ee.getImportName() == null) {
+        if (ee.getImportName() == null) {
           //   export * from "mod";
           starExportEntries.add(ee);
         } else {
@@ -159,7 +159,7 @@ class Es6ModuleRegistry {
       List<Node> requestedModules = module.getRequestedModules();
 
       // If this imports or export something, this is a ES6 module.
-      if(!requestedModules.isEmpty() || module.hasExports()) {
+      if (!requestedModules.isEmpty() || module.hasExports()) {
         nonModules.remove(moduleName);
       }
 
@@ -185,7 +185,7 @@ class Es6ModuleRegistry {
 
         // skip is this entry has failed module request.
         String required = e.getModuleRequest();
-        if(required != null && failedModules.contains(required)) {
+        if (required != null && failedModules.contains(required)) {
           continue;
         }
 
@@ -252,7 +252,7 @@ class Es6ModuleRegistry {
   }
 
   private Es6Module getModule(URI loadAddress) {
-    if(loadAddress == null) {
+    if (loadAddress == null) {
       return null;
     }
     String moduleName = ES6ModuleLoader.toModuleName(loadAddress);
@@ -269,7 +269,7 @@ class Es6ModuleRegistry {
   }
 
   public Es6Module.Namespace getModuleNamespace(Es6Module module) {
-    if(module != null) {
+    if (module != null) {
       return module.getNamespace();
     }
     return null;

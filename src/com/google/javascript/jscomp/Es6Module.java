@@ -116,7 +116,7 @@ class Es6Module {
    * this module.
    */
   public Namespace getNamespace() {
-    if(namespace == null) {
+    if (namespace == null) {
       namespace = new Namespace(this, getExportedNames());
     }
     return namespace;
@@ -142,21 +142,21 @@ class Es6Module {
     exportStarSet.add(this);
 
     Set<String> exportedNames = new LinkedHashSet<>();
-    for(ExportEntry e : localExportEntries) {
+    for (ExportEntry e : localExportEntries) {
       exportedNames.add(e.getExportName());
     }
-    for(ExportEntry e : indirectExportEntries) {
+    for (ExportEntry e : indirectExportEntries) {
       exportedNames.add(e.getExportName());
     }
-    for(ExportEntry e : starExportEntries) {
+    for (ExportEntry e : starExportEntries) {
       Es6Module requestedModule = registry.resolveImportedModule(this, e.getModuleRequest());
       if (requestedModule == null) {
         return null;
       }
 
       Set<String> starNames = requestedModule.getExportedNames(exportStarSet);
-      for(String n : starNames) {
-        if("default" != n) {
+      for (String n : starNames) {
+        if ("default" != n) {
           exportedNames.add(n);
         }
       }
@@ -174,7 +174,7 @@ class Es6Module {
       // If resolution not cached yet. Call implementation and cache the result.
       // Note that the result may be null.
       ModuleNamePair resolution = resolveExport(exportName, new HashSet<ModuleNamePair>(), new HashSet<Es6Module>());
-      if(resolution == ModuleNamePair.AMBIGUOUS) {
+      if (resolution == ModuleNamePair.AMBIGUOUS) {
         // we don't have to propagate AMBIGUOUS resolution to outside.
         resolution = null;
       }
@@ -195,53 +195,53 @@ class Es6Module {
 
 
     ModuleNamePair resolve = new ModuleNamePair(this, exportName);
-    if(resolveSet.contains(resolve)) {
+    if (resolveSet.contains(resolve)) {
       // this is a circular import request.
       return null;
     }
     resolveSet.add(resolve);
 
-    for(ExportEntry e : localExportEntries) {
-      if(exportName.equals(e.getExportName())) {
+    for (ExportEntry e : localExportEntries) {
+      if (exportName.equals(e.getExportName())) {
         // module provides the direct binding for this export.
         return new ModuleNamePair(this, e.getLocalName());
       }
     }
 
-    for(ExportEntry e : indirectExportEntries) {
-      if(exportName.equals(e.getExportName())) {
+    for (ExportEntry e : indirectExportEntries) {
+      if (exportName.equals(e.getExportName())) {
         Es6Module importedModule = registry.resolveImportedModule(this, e.getModuleRequest());
-        if(importedModule == null) {
+        if (importedModule == null) {
           return null;
         }
-        if(e.getImportName() == null) {
+        if (e.getImportName() == null) {
           // module re-exports another module namespace object.
           return new ModuleNamePair(importedModule, null);
         }
         // module imports a specific binding for this export.
         ModuleNamePair indirectResolution =
             importedModule.resolveExport(e.getImportName(), resolveSet, exportStarSet);
-        if(indirectResolution != null) {
+        if (indirectResolution != null) {
           return indirectResolution;
         }
       }
     }
 
-    if("default".equals(exportName)) {
+    if ("default".equals(exportName)) {
       // A default export was not explicitly defined by this module.
       // Note: A `default` export cannot be provided by an `export *`.
       return null;
     }
 
-    if(exportStarSet.contains(this)) {
+    if (exportStarSet.contains(this)) {
       return null;
     }
     exportStarSet.add(this);
 
     ModuleNamePair starResolution = null;
-    for(ExportEntry e : starExportEntries) {
+    for (ExportEntry e : starExportEntries) {
       Es6Module importedModule = registry.resolveImportedModule(this, e.getModuleRequest());
-      if(importedModule == null) {
+      if (importedModule == null) {
         return null;
       }
       ModuleNamePair resolution = importedModule.resolveExport(exportName, resolveSet, exportStarSet);
@@ -347,7 +347,7 @@ class Es6Module {
     private final Node origName;
 
     public ExportEntry(Node exportName, Node moduleRequest, Node origName) {
-      if(moduleRequest == null) {
+      if (moduleRequest == null) {
         Preconditions.checkArgument(origName != null && exportName != null);
       }
       this.exportName = exportName;
