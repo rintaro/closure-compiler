@@ -253,11 +253,8 @@ public final class Es6RewriteModule implements HotSwapCompilerPass, NodeTraversa
    * @see "http://www.ecma-international.org/ecma-262/6.0/#sec-createimportbinding"
    */
   private void visitName(NodeTraversal t, Node n, Node parent) {
-    String name = n.getString();
-    Var var = t.getScope().getVar(name);
-
-    if(var != null && var.getScope() == moduleScope) {
-      ModuleNamePair binding = resolveModuleBinding(name);
+    ModuleNamePair binding = resolveModuleBinding(t, n.getString());
+    if(binding != null) {
       if (binding.module != module && NodeUtil.isAssignmentTarget(n)) {
         // Imported bindings are immutable.
         t.report(n, IMPORTED_BINDING_ASSIGNMENT);
@@ -344,7 +341,12 @@ public final class Es6RewriteModule implements HotSwapCompilerPass, NodeTraversa
   /**
    * Resolve NAME in current module scope.
    */
-  private ModuleNamePair resolveModuleBinding(String name) {
+  private ModuleNamePair resolveModuleBinding(NodeTraversal t, String name) {
+    Var var = t.getScope().getVar(name);
+    if(var == null || var.getScope() != moduleScope) {
+      // this name is not declared in moduleScope.
+      return null;
+    }
 
     ImportEntry in = module.getImportEntry(name);
     if(in == null) {
@@ -450,10 +452,8 @@ public final class Es6RewriteModule implements HotSwapCompilerPass, NodeTraversa
       String baseName = splitted.get(0);
       rest = splitted.subList(1, splitted.size());
 
-      Var var = t.getScope().getVar(baseName);
-      if (var != null && var.getScope() == moduleScope) {
-        binding = resolveModuleBinding(baseName);
-      } else {
+      binding = resolveModuleBinding(t, baseName);
+      if (binding == null) {
         // Not file global nor imported.
         return;
       }
