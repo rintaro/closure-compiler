@@ -108,7 +108,7 @@ class Es6ModuleRegistry {
           // Note: According to the specification, "re-export of an
           // imported module namespace object" would be added to localExportEntries
           // But since we statically resolve module namespace object in
-          // Es6ModuleRewrite, we put them into indirectExportEntries here.
+          // Es6RewriteModule, we put them into indirectExportEntries here.
           indirectExportEntries.add(
               new ExportEntry(
                   ee.getExportNameNode(),

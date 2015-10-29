@@ -1145,7 +1145,7 @@ public final class DefaultPassConfig extends PassConfig {
       new PassFactory("Es6RewriteModule", true) {
         @Override
         protected CompilerPass create(final AbstractCompiler compiler) {
-          return new Es6ModuleRewrite(compiler);
+          return new Es6RewriteModule(compiler);
         }
       };
 

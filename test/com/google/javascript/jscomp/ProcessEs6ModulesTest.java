@@ -55,7 +55,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
 
   @Override
   public CompilerPass getProcessor(Compiler compiler) {
-    return new Es6ModuleRewrite(compiler);
+    return new Es6RewriteModule(compiler);
   }
 
   @Override
@@ -240,10 +240,10 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
   public void testExport_missing() {
     testError(
         "export {foo}",
-        Es6ModuleRewrite.EXPORTED_BINDING_NOT_DECLARED);
+        Es6RewriteModule.EXPORTED_BINDING_NOT_DECLARED);
     testError(
         "var foo; export {bar as foo};",
-        Es6ModuleRewrite.EXPORTED_BINDING_NOT_DECLARED);
+        Es6RewriteModule.EXPORTED_BINDING_NOT_DECLARED);
   }
 
   public void testExportDuplicate() {
@@ -692,7 +692,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "import {name} from 'mod1';",
             "name = 42;")),
         null,
-        Es6ModuleRewrite.IMPORTED_BINDING_ASSIGNMENT);
+        Es6RewriteModule.IMPORTED_BINDING_ASSIGNMENT);
 
     test(
         ImmutableList.of(
@@ -701,7 +701,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "import {name} from 'mod1';",
             "name++;")),
         null,
-        Es6ModuleRewrite.IMPORTED_BINDING_ASSIGNMENT);
+        Es6RewriteModule.IMPORTED_BINDING_ASSIGNMENT);
 
     test(
         ImmutableList.of(
@@ -710,7 +710,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "import * as ns from 'mod1';",
             "ns = 42;")),
         null,
-        Es6ModuleRewrite.IMPORTED_BINDING_ASSIGNMENT);
+        Es6RewriteModule.IMPORTED_BINDING_ASSIGNMENT);
 
     test(
         ImmutableList.of(
@@ -719,7 +719,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "import * as ns from 'mod1';",
             "ns.name = 42;")),
         null,
-        Es6ModuleRewrite.IMPORTED_BINDING_ASSIGNMENT);
+        Es6RewriteModule.IMPORTED_BINDING_ASSIGNMENT);
 
     test(
         ImmutableList.of(
@@ -728,7 +728,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "import * as ns from 'mod1';",
             "ns.newName = 42;")),
         null,
-        Es6ModuleRewrite.IMPORTED_BINDING_ASSIGNMENT);
+        Es6RewriteModule.IMPORTED_BINDING_ASSIGNMENT);
 
     test(
         ImmutableList.of(
@@ -740,7 +740,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
               "import * as ns2 from 'mod2';",
               "ns2.ns1 = 42")),
         null,
-        Es6ModuleRewrite.IMPORTED_BINDING_ASSIGNMENT);
+        Es6RewriteModule.IMPORTED_BINDING_ASSIGNMENT);
   }
 
   public void testAssignImportedObject() {
@@ -773,7 +773,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
             "import * as ns from 'mod1';",
             "use(ns)")),
         null,
-        Es6ModuleRewrite.MODULE_NAMESPACE_NON_GETPROP);
+        Es6RewriteModule.MODULE_NAMESPACE_NON_GETPROP);
 
     SourceFile mod2 = source("mod2.js",
         "import * as ns1 from 'mod1';",
@@ -787,7 +787,7 @@ public final class ProcessEs6ModulesTest extends CompilerTestCase {
               "import * as ns2 from 'mod2'",
               "use(ns2.ns1)")),
         null,
-        Es6ModuleRewrite.MODULE_NAMESPACE_NON_GETPROP);
+        Es6RewriteModule.MODULE_NAMESPACE_NON_GETPROP);
   }
 
   public void testGoogRequires_rewrite() {

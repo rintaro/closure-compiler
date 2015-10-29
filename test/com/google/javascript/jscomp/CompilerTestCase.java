@@ -1104,7 +1104,7 @@ public abstract class CompilerTestCase extends TestCase {
         // Only run process ES6 module once, if asked.
         if (rewriteEs6Module && i == 0) {
           recentChange.reset();
-          new Es6ModuleRewrite(compiler).process(null, mainRoot);
+          new Es6RewriteModule(compiler).process(null, mainRoot);
           hasCodeChanged = hasCodeChanged || recentChange.hasCodeChanged();
         }
 

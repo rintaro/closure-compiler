@@ -38,7 +38,7 @@ import java.util.Iterator;
  * Appends suffix to all global variable names defined in this module and
  * rewrites imported variables into it's original name.
  */
-public final class Es6ModuleRewrite implements HotSwapCompilerPass, NodeTraversal.Callback {
+public final class Es6RewriteModule implements HotSwapCompilerPass, NodeTraversal.Callback {
 
   static final DiagnosticType EXPORTED_BINDING_NOT_DECLARED =
       DiagnosticType.error(
@@ -80,12 +80,12 @@ public final class Es6ModuleRewrite implements HotSwapCompilerPass, NodeTraversa
   private Scope moduleScope;
 
   /**
-   * Creates a new Es6ModuleRewrite instance which can be used to rewrite
+   * Creates a new Es6RewriteModule instance which can be used to rewrite
    * ES6 modules to a concatenable form.
    *
    * @param compiler The compiler
    */
-  public Es6ModuleRewrite(AbstractCompiler compiler) {
+  public Es6RewriteModule(AbstractCompiler compiler) {
     this.compiler = compiler;
     this.moduleRegistry = compiler.getEs6ModuleRegistry();
     this.module = null;
