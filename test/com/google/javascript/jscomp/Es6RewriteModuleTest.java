@@ -26,14 +26,14 @@ import com.google.javascript.rhino.Node;
  * Unit tests for {@link ProcessEs6Modules}
  */
 
-public final class ProcessEs6ModulesTest extends CompilerTestCase {
+public final class Es6RewriteModuleTest extends CompilerTestCase {
 
   static final String FILE_OVERVIEW = LINE_JOINER.join(
       "/** @fileoverview",
       " * @suppress {missingProvide|missingRequire}",
       " */");
 
-  public ProcessEs6ModulesTest() {
+  public Es6RewriteModuleTest() {
     compareJsDoc = true;
   }
 
