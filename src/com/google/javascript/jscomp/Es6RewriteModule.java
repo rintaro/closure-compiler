@@ -1,5 +1,5 @@
 /*
- * Copyright 2014 The Closure Compiler Authors.
+ * Copyright 2015 The Closure Compiler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,8 +37,26 @@ import java.util.Set;
 import java.util.Iterator;
 
 /**
- * Appends suffix to all global variable names defined in this module and
- * rewrites imported variables into it's original name.
+ * Process ES6 module to rewrite them into concatenatable form.
+ *
+ * 1) Remove ImportDeclarations.
+ * 2) Rewrite ExportDeclarations into normal declarations. Or remove them.
+ * 3) Append {@code $module$moduleName} suffix to all global variable names defined
+ *    in this module scope.
+ * 4) Rewrite imported binding into its original name.
+ * 5) Resolve and collapse property get on module namespace object.
+ * 6) Fix JSDoc type nodes as the same manner as 1),2),3).
+ * 7) Rewrite global {@code this} into {@code undefined}.
+ * 8) Rewrites {@code const ns = goog.require()}.
+ * 9) Add @supperss {missingRequire|missingProvide} annotation to script.
+ * a) Add "use strict" directive, because all ES6 module must be treated as that.
+ * b) Misc error checks.
+ *    ERROR: Exporting undeclared name.
+ *    ERROR: Assignment to module namespace object.
+ *    ERROR: Assignment to imported bindings.
+ *    ERROR: Non {@ const} LHS of goog.require
+ *    WARN: Unnecessary "use strict".
+ *    ERROR: Usage of module namespace object without getProp.
  */
 public final class Es6RewriteModule implements HotSwapCompilerPass, NodeTraversal.Callback {
 
