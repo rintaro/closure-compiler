@@ -66,42 +66,6 @@ public final class Es6RewriteModuleTest extends CompilerTestCase {
     return 1;
   }
 
-  static void testModules(CompilerTestCase test, String input, String expected) {
-    // Shared with ProcessCommonJSModulesTest.
-    String fileName = test.getFilename() + ".js";
-    ImmutableList<SourceFile> inputs =
-        ImmutableList.of(SourceFile.fromCode("other.js", ""), SourceFile.fromCode(fileName, input));
-    ImmutableList<SourceFile> expecteds =
-        ImmutableList.of(
-            SourceFile.fromCode("other.js", ""),
-            SourceFile.fromCode(fileName, FILE_OVERVIEW + expected));
-    test.test(inputs, expecteds);
-  }
-
-  static void testModules(
-      CompilerTestCase test, ImmutableList<SourceFile> inputs, String expected) {
-    ImmutableList<SourceFile> expecteds =
-        ImmutableList.of(
-            SourceFile.fromCode("other.js", ""),
-            SourceFile.fromCode(test.getFilename() + ".js", expected));
-    test.test(inputs, expecteds);
-  }
-
-  void testModules(String input, String expected) {
-    testModules(this, input, expected);
-  }
-
-  private static void testModules(CompilerTestCase test, String input, DiagnosticType error) {
-    String fileName = test.getFilename() + ".js";
-    ImmutableList<SourceFile> inputs =
-        ImmutableList.of(SourceFile.fromCode("other.js", ""), SourceFile.fromCode(fileName, input));
-    test.test(inputs, null, error);
-  }
-
-  private void testModules(String input, DiagnosticType error) {
-    testModules(this, input, error);
-  }
-
   private SourceFile source(String filename, String... lines) {
     return SourceFile.fromCode(filename, LINE_JOINER.join(lines));
   }
@@ -412,8 +376,7 @@ public final class Es6RewriteModuleTest extends CompilerTestCase {
             source("mod2.js",
                 FILE_OVERVIEW,
                 "var a$$module$mod2;"),
-            source("mod1.js",
-                ""),
+            source("mod1.js"),
             source("main.js",
                 FILE_OVERVIEW,
                 "use(a$$module$mod2);")));
@@ -433,8 +396,7 @@ public final class Es6RewriteModuleTest extends CompilerTestCase {
             source("mod2.js",
                 FILE_OVERVIEW,
                 "var a$$module$mod2;"),
-            source("mod1.js",
-                ""),
+            source("mod1.js"),
             source("main.js",
                 FILE_OVERVIEW,
                 "use(a$$module$mod2);")));
@@ -454,11 +416,31 @@ public final class Es6RewriteModuleTest extends CompilerTestCase {
             source("mod2.js",
                 FILE_OVERVIEW,
                 "var a$$module$mod2;"),
-            source("mod1.js",
-                ""),
+            source("mod1.js"),
             source("main.js",
                 FILE_OVERVIEW,
                 "use(a$$module$mod2);")));
+
+    test(
+        ImmutableList.of(
+            source("mod2.js",
+                "export var a;"),
+            source("mod1.js",
+                "export * from 'mod2';",
+                "export var foo;"),
+            source("main.js",
+                "import * as ns from 'mod1';",
+                "use(ns.a, ns.foo);")),
+        ImmutableList.of(
+            source("mod2.js",
+                FILE_OVERVIEW,
+                "var a$$module$mod2;"),
+            source("mod1.js",
+                FILE_OVERVIEW,
+                "var foo$$module$mod1;"),
+            source("main.js",
+                FILE_OVERVIEW,
+                "use(a$$module$mod2, foo$$module$mod1);")));
   }
 
   public void testIndirectExportNamespace() {
@@ -476,8 +458,7 @@ public final class Es6RewriteModuleTest extends CompilerTestCase {
             source("mod2.js",
                 FILE_OVERVIEW,
                 "var a$$module$mod2;"),
-            source("mod1.js",
-                ""),
+            source("mod1.js"),
             source("main.js",
                 FILE_OVERVIEW,
                 "use(a$$module$mod2);")));
@@ -496,8 +477,7 @@ public final class Es6RewriteModuleTest extends CompilerTestCase {
             source("mod2.js",
                 FILE_OVERVIEW,
                 "var a$$module$mod2;"),
-            source("mod1.js",
-                ""),
+            source("mod1.js"),
             source("main.js",
                 FILE_OVERVIEW,
                 "use(a$$module$mod2);")));
@@ -561,7 +541,7 @@ public final class Es6RewriteModuleTest extends CompilerTestCase {
                 "function use$$module$main(arg1, arg2) {}")));
   }
 
-  public void preserveTypeCast() {
+  public void testPreserveTypeCast() {
     test(
         ImmutableList.of(
             source("other.js",
@@ -578,6 +558,25 @@ public final class Es6RewriteModuleTest extends CompilerTestCase {
             source("main.js",
                 FILE_OVERVIEW,
                 "use(/** @type {number} */(foo$$module$other), foo);")));
+  }
+
+  public void testPreserveLocalVariable() {
+    test(
+        ImmutableList.of(
+            source("other.js",
+                "export var foo = 42, bar = 12;"),
+            source("main.js",
+                "import {foo,bar} from 'other';",
+                "use(foo, bar);",
+                "function f(foo) { var bar=''; use(foo, bar);}")),
+        ImmutableList.of(
+            source("other.js",
+                FILE_OVERVIEW,
+                "var foo$$module$other = 42, bar$$module$other = 12;"),
+            source("main.js",
+                FILE_OVERVIEW,
+                "use(foo$$module$other, bar$$module$other);",
+                "function f$$module$main(foo) { var bar=''; use(foo, bar); }")));
   }
 
   public void testExtendImportedClass() {
@@ -671,6 +670,119 @@ public final class Es6RewriteModuleTest extends CompilerTestCase {
                 "obj$$module$main.useParent(new Parent$$module$parent)")));
   }
 
+  public void testReferenceToTypeFromOtherModule() {
+    test(
+        ImmutableList.of(
+            source("path/to.the/parent.js",
+                "export default class Parent {",
+                "  constructor() {",
+                "    /** @type {?../to.the/child.default} */",
+                "    this.child = null;",
+                "  }",
+                "  /** @param {!./child.default} child */",
+                "  setChild(child) {",
+                "    this.child = child;",
+                "  }",
+                "}"),
+            source("path/to.the/child.js",
+                "import Parent from './parent'",
+                "export default class Child extends Parent {}")),
+        ImmutableList.of(
+            source("path/to.the/parent.js",
+                FILE_OVERVIEW,
+                "class Parent$$module$path$to_the$parent {",
+                "  constructor() {",
+                "    /** @type {?Child$$module$path$to_the$child} */",
+                "    this.child = null;",
+                "  }",
+                "  /** @param {!Child$$module$path$to_the$child} child */",
+                "  setChild(child) {",
+                "    this.child = child;",
+                "  }",
+                "}"),
+            source("path/to.the/child.js",
+                FILE_OVERVIEW,
+                "class Child$$module$path$to_the$child "
+                    + " extends Parent$$module$path$to_the$parent {}")));
+  }
+
+  public void testPreserveNonModule() {
+    test(
+        ImmutableList.of(
+            source("const.js",
+                "var NAME = 42;"),
+            source("other.js",
+                "export var NAME = 12"),
+            source("main.js",
+                "import {NAME as IMP_NAME} from 'other';",
+                "use(NAME, IMP_NAME);")),
+        ImmutableList.of(
+            source("const.js",
+                "var NAME = 42"),
+            source("other.js",
+                FILE_OVERVIEW,
+                "var NAME$$module$other = 12"),
+            source("main.js",
+                FILE_OVERVIEW,
+                "use(NAME, NAME$$module$other)")));
+
+    test(
+        ImmutableList.of(
+            source("const.js",
+                "var NAME = 42;"),
+            source("other.js",
+                "export var NAME = 12"),
+            source("main.js",
+                "import {NAME as IMP_NAME} from 'other';",
+                "var NAME = 54;",
+                "use(NAME, IMP_NAME);")),
+        ImmutableList.of(
+            source("const.js",
+                "var NAME = 42"),
+            source("other.js",
+                FILE_OVERVIEW,
+                "var NAME$$module$other = 12"),
+            source("main.js",
+                FILE_OVERVIEW,
+                "var NAME$$module$main = 54;",
+                "use(NAME$$module$main, NAME$$module$other)")));
+  }
+
+  public void testWithKeywords() {
+    test(
+        ImmutableList.of(
+            source("mod1.js",
+                "var a, b, c;",
+                "export {a as default}",
+                "export {b as class, c as switch}"),
+            source("mod2.js",
+                "export {switch as class, default as package} from 'mod1';",
+                "export {class as default} from 'mod1';"),
+            source("main.js",
+                "import x, {class as y, package as z} from 'mod2';",
+                "use(x, y, z)")),
+        ImmutableList.of(
+            source("mod1.js",
+                FILE_OVERVIEW,
+                "var a$$module$mod1, b$$module$mod1, c$$module$mod1;"),
+            source("mod2.js"),
+            source("main.js",
+                FILE_OVERVIEW,
+                "use(b$$module$mod1, c$$module$mod1, a$$module$mod1)")));
+  }
+
+  public void testRewriteThis() {
+    test(
+        "export var foo = 12; use(this)",
+        FILE_OVERVIEW
+            + "var foo$$module$testcode = 12; use(undefined)");
+
+    test(
+        "export class C {f() { use(this) }}",
+        FILE_OVERVIEW
+            + "class C$$module$testcode {f() { use(this) }}");
+  }
+
   public void testLoadError() {
     testError(
         "import name from 'module_does_not_exist'; use(name);",
@@ -680,12 +792,12 @@ public final class Es6RewriteModuleTest extends CompilerTestCase {
         ES6ModuleLoader.LOAD_ERROR);
     testError(
         LINE_JOINER.join(
-          "export var name;",
-          "/** @param {./module/does/not/exists.Foo} arg */ function f(arg) {}"),
+            "export var name;",
+            "/** @param {./module/does/not/exists.Foo} arg */ function f(arg) {}"),
         ES6ModuleLoader.LOAD_ERROR);
   }
 
-  public void assignImportedName() {
+  public void testImportedNameAssignment() {
     SourceFile mod1 = source("mod1.js", "export var name = 12");
 
     test(
@@ -714,6 +826,10 @@ public final class Es6RewriteModuleTest extends CompilerTestCase {
             "ns = 42;")),
         null,
         Es6RewriteModule.IMPORTED_BINDING_ASSIGNMENT);
+  }
+
+  public void testModuleNamespaceAssignment() {
+    SourceFile mod1 = source("mod1.js", "export var name = 12");
 
     test(
         ImmutableList.of(
@@ -722,7 +838,7 @@ public final class Es6RewriteModuleTest extends CompilerTestCase {
             "import * as ns from 'mod1';",
             "ns.name = 42;")),
         null,
-        Es6RewriteModule.IMPORTED_BINDING_ASSIGNMENT);
+        Es6RewriteModule.MODULE_NAMESPACE_ASSIGNMENT);
 
     test(
         ImmutableList.of(
@@ -731,7 +847,7 @@ public final class Es6RewriteModuleTest extends CompilerTestCase {
             "import * as ns from 'mod1';",
             "ns.newName = 42;")),
         null,
-        Es6RewriteModule.IMPORTED_BINDING_ASSIGNMENT);
+        Es6RewriteModule.MODULE_NAMESPACE_ASSIGNMENT);
 
     test(
         ImmutableList.of(
@@ -743,7 +859,7 @@ public final class Es6RewriteModuleTest extends CompilerTestCase {
               "import * as ns2 from 'mod2';",
               "ns2.ns1 = 42")),
         null,
-        Es6RewriteModule.IMPORTED_BINDING_ASSIGNMENT);
+        Es6RewriteModule.MODULE_NAMESPACE_ASSIGNMENT);
   }
 
   public void testAssignImportedObject() {
@@ -765,7 +881,7 @@ public final class Es6RewriteModuleTest extends CompilerTestCase {
               "obj$$module$mod1.newName = 24;")));
   }
 
-  public void useNamespaceNonGetProp() {
+  public void testUseNamespaceNonGetProp() {
     SourceFile mod1 = source("mod1.js",
         "export var name");
 

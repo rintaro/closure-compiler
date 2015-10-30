@@ -67,12 +67,12 @@ public final class Es6RewriteModule implements HotSwapCompilerPass, NodeTraversa
 
   static final DiagnosticType MODULE_NAMESPACE_ASSIGNMENT =
       DiagnosticType.error(
-          "JSC_ES6_MODULE_NAMESPACE_OBJECT_ASSIGNEMNT",
+          "JSC_ES6_MODULE_NAMESPACE_ASSIGNEMNT",
           "All properties on module namespace exotic object are immutable.");
 
   static final DiagnosticType MODULE_NAMESPACE_NON_GETPROP =
       DiagnosticType.error(
-          "JSC_ES6_MODULE_NAMESPACE_OBJECT_NON_GETPROP",
+          "JSC_ES6_MODULE_NAMESPACE_NON_GETPROP",
           "Using module namespace exotic object without property get is not supported.");
 
   static final DiagnosticType IMPORTED_BINDING_ASSIGNMENT =
