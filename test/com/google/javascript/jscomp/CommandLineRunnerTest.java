@@ -937,6 +937,29 @@ public final class CommandLineRunnerTest extends TestCase {
          });
   }
 
+  public void testEntryModule() throws Exception {
+    args.add("--env=CUSTOM");
+    args.add("--language_in=ECMASCRIPT6");
+    args.add("--language_out=ECMASCRIPT5");
+    args.add("--js_entry_module=app2");
+    setFilename(0, "base.js");
+    setFilename(1, "app1.js");
+    setFilename(2, "app2.js");
+    setFilename(3, "other.js");
+    test(new String[] {
+          "/** This is base.js */\nvar COMPILED = false;",
+          "import {foo} from 'other'; use1(foo)",
+          "import {foo} from 'other'; use2(foo)",
+          "export var foo = 42",
+        },
+        new String[] {
+          "var COMPILED = !1",
+          "var module$other = {}, foo$$module$other = 42;"
+            + "module$other.foo = foo$$module$other;",
+          "use2(module$other.foo);"
+        });
+  }
+
   public void testSourceMapExpansion1() {
     args.add("--js_output_file");
     args.add("/path/to/out.js");

@@ -367,9 +367,11 @@ public final class ProcessEs6Modules extends AbstractPostOrderCallback {
           IR.call(NodeUtil.newQName(compiler, "goog.provide"),
               IR.string(moduleName)));
       script.addChildToFront(googProvide.copyInformationFromForTree(script));
-      if (reportDependencies) {
-        t.getInput().addProvide(moduleName);
-      }
+    }
+    // Es6 module should always declare addProvide even if it does not export anything
+    // so that module dependency graph can recognize this possible entry_module.
+    if (reportDependencies) {
+      t.getInput().addProvide(moduleName);
     }
 
     JSDocInfoBuilder jsDocInfo = script.getJSDocInfo() == null

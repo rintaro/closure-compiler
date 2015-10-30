@@ -427,6 +427,14 @@ public class CommandLineRunner extends
             "Your main script.")
     private String commonJsEntryModule;
 
+    @Option(name = "--js_entry_module",
+        hidden = true,
+        usage = "Entry points of your ES6 module dependency hierarchy. "
+            + "You may specify multiple. Any modules that are not a "
+            + "transitive dependency of the entry module will be "
+            + "removed. Non module files will always be left in.")
+    private List<String> entryModule = new ArrayList<>();
+
     @Option(name = "--transform_amd_modules",
         hidden = true,
         usage = "Transform AMD to CommonJS modules.")
@@ -1028,6 +1036,13 @@ public class CommandLineRunner extends
       }
       flags.closureEntryPoint =
           ImmutableList.of(ES6ModuleLoader.toModuleName(URI.create(flags.commonJsEntryModule)));
+    }
+
+    if (!flags.entryModule.isEmpty()) {
+      for (String specifier : flags.entryModule) {
+        flags.closureEntryPoint.add(
+            ES6ModuleLoader.toModuleName(URI.create(specifier)));
+      }
     }
 
     if (flags.outputWrapperFile != null && !flags.outputWrapperFile.isEmpty()) {
