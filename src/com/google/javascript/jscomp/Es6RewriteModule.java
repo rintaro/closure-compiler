@@ -327,6 +327,10 @@ public final class Es6RewriteModule implements HotSwapCompilerPass, NodeTraversa
       }
 
       Es6Module.Namespace ns = moduleRegistry.getModuleNamespace(target.getString());
+      if(ns == null) {
+        // this is not ES6 namespace object.
+        return;
+      }
       String propertyName = target.getNext().getString();
       ModuleNamePair binding = ns.get(propertyName);
       if (binding == null) {
@@ -452,8 +456,16 @@ public final class Es6RewriteModule implements HotSwapCompilerPass, NodeTraversa
       //   @type {./foo/bar.baz/qux.quux.Foo}
       int lastSlash = name.lastIndexOf('/');
       int endIndex = name.indexOf('.', lastSlash);
+      String required;
+      if(endIndex != -1) {
+        required = name.substring(0, endIndex);
+        rest = Splitter.on('.').splitToList(name.substring(endIndex + 1));
+      } else {
+        // This is a case we do not support. (ie. namespace object as a type)
+        // It will eventually be an error below.
+        required = name;
+      }
 
-      String required = name.substring(0, endIndex);
       Es6Module mod = moduleRegistry.resolveImportedModule(module, required);
       if (mod == null) {
         // Since JSDocs are not processed in Es6ModuleRegistry#instantiateAllModules(),
@@ -462,9 +474,6 @@ public final class Es6RewriteModule implements HotSwapCompilerPass, NodeTraversa
         return;
       }
       binding = new ModuleNamePair(mod, null);
-      if (endIndex >= 0) {
-        rest = Splitter.on('.').splitToList(name.substring(endIndex + 1));
-      }
     } else {
       List<String> splitted = Splitter.on('.').splitToList(name);
       String baseName = splitted.get(0);
@@ -498,7 +507,6 @@ public final class Es6RewriteModule implements HotSwapCompilerPass, NodeTraversa
       rest = ImmutableList.copyOf(path);
     }
 
-    Preconditions.checkState(binding.name != null);
     String newName = toGlobalName(binding);
     if (!rest.isEmpty()) {
       newName += "." + Joiner.on('.').join(rest);

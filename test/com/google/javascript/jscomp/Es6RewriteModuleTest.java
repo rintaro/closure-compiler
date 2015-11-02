@@ -883,7 +883,7 @@ public final class Es6RewriteModuleTest extends CompilerTestCase {
 
   public void testUseNamespaceNonGetProp() {
     SourceFile mod1 = source("mod1.js",
-        "export var name");
+        "export class Foo {}");
 
     test(
         ImmutableList.of(
@@ -905,6 +905,16 @@ public final class Es6RewriteModuleTest extends CompilerTestCase {
           source("main.js",
               "import * as ns2 from 'mod2'",
               "use(ns2.ns1)")),
+        null,
+        Es6RewriteModule.MODULE_NAMESPACE_NON_GETPROP);
+
+    test(
+        ImmutableList.of(
+          mod1,
+          mod2,
+          source("main.js",
+              "import 'mod2';",
+              "/** @type {./mod1} */var foo;")),
         null,
         Es6RewriteModule.MODULE_NAMESPACE_NON_GETPROP);
   }
